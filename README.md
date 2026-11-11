@@ -1,4 +1,4 @@
-# HARES RUN — parcours de course sur Google Maps
+# HARES RUN — parcours de course sur OpenStreetMap
 
 Planificateur de parcours de course à pied, en sombre et sans fioritures.
 On place un **départ**, des **étapes** et une **arrivée** sur la carte (ou on
@@ -6,7 +6,9 @@ part de sa position), HARES RUN calcule l'itinéraire piéton, la distance, le
 dénivelé, et l'**allure** à tenir pour finir dans le temps prévu. Le
 parcours s'exporte en **image PNG** avec ces informations.
 
-Page statique : aucun build, le dossier `site/` est publié tel quel.
+**Gratuit, sans clé ni compte** : tout repose sur OpenStreetMap et des
+services publics gratuits. Page statique : aucun build, le dossier `site/`
+est publié tel quel.
 
 ```
 haresrun/
@@ -15,7 +17,8 @@ haresrun/
 │   ├── style.css
 │   ├── app.js         carte, points, itinéraire, allure
 │   ├── poster.js      l'image PNG (1080 × 1350)
-│   ├── config.js      ← réglages : clé Google Maps, centre par défaut
+│   ├── config.js      ← réglages : centre de la carte par défaut
+│   ├── vendor/leaflet bibliothèque de carte (Leaflet 1.9.4, licence BSD)
 │   └── favicon.svg
 └── serve.py           aperçu local
 ```
@@ -30,37 +33,36 @@ puis ouvrir <http://localhost:8000>. La géolocalisation n'est permise par
 les navigateurs que sur `https://` ou `localhost` : ouvrir `index.html`
 directement (`file://`) ne la donnerait pas.
 
-## En ligne (Cloudflare Pages)
+## Services utilisés
 
-Le site est publié sur Cloudflare Pages, projet `haresrun`, dossier
-`site/`, sans commande de build. Une fois publié, ajouter l'adresse
-`https://haresrun.pages.dev/*` aux sites autorisés de la clé Google Maps.
+| Fonction | Service | Remarque |
+|---|---|---|
+| Carte « Sombre » | tuiles CARTO Dark | données OpenStreetMap |
+| Carte « Détaillé » | tuiles OpenStreetMap standard, assombries | le plus de détails : sentiers, pistes, bâtiments |
+| Carte « Satellite » | imagerie Esri World Imagery | pour repérer ce qui n'est pas sur la carte |
+| Itinéraire piéton | OSRM de FOSSGIS (`routing.openstreetmap.de`) | ligne droite si indisponible |
+| Recherche, nom des points | Nominatim (OpenStreetMap), Photon en secours | une requête par seconde au plus |
+| Dénivelé | Open-Meteo | |
 
-## La clé Google Maps
+Ces services publics sont gratuits avec un usage raisonnable : parfait pour
+un usage perso ou un club. Pour une appli très fréquentée, il faudrait
+héberger son propre serveur d'itinéraires et de tuiles.
 
-HARES RUN appelle Google directement depuis le navigateur, avec ta clé.
+## Quand la carte manque de détails
 
-1. [Console Google Cloud](https://console.cloud.google.com/google/maps-apis/credentials) → créer une clé API (un compte de facturation est exigé ; le crédit mensuel gratuit couvre largement un usage perso).
-2. Activer les API :
+OpenStreetMap est fait par ses utilisateurs : selon les quartiers, un
+sentier ou une piste peut manquer. Trois solutions, de la plus rapide à la
+plus durable :
 
-   | API | Sert à | Sans elle |
-   |---|---|---|
-   | Maps JavaScript API | la carte | rien ne marche |
-   | Routes API | l'itinéraire piéton | repli sur Directions API, sinon ligne droite |
-   | Geocoding API | le nom des points, la recherche | coordonnées à la place des adresses |
-   | Places API (New) | la recherche de lieux | repli sur Geocoding |
-   | Elevation API | le dénivelé | pas de dénivelé |
-   | Maps Static API | le fond de carte du PNG | image sans fond de carte |
-
-3. **Restreindre la clé** : *Restrictions d'application → Sites web*, avec
-   `http://localhost:8000/*` et l'adresse du site publié.
-
-Deux façons de la donner à HARES RUN :
-
-- la saisir au premier lancement (lien « Clé API ») : elle est gardée dans
-  le navigateur, rien dans le dépôt ;
-- ou l'écrire dans `site/config.js` (`googleMapsApiKey`) : pratique pour un
-  site publié, mais le fichier est public — d'où la restriction par site.
+1. **Changer de fond** (menu en haut à droite) : « Détaillé » montre bien
+   plus de chemins que « Sombre », « Satellite » montre le terrain réel.
+2. **Décocher « Suivre les chemins »** : les points sont reliés en ligne
+   droite, pour courir là où la carte ne connaît pas de chemin. Avec la vue
+   satellite et des étapes rapprochées, le tracé suit le vrai sentier.
+3. **Ajouter le chemin à OpenStreetMap** : lien « Un chemin manque ? » en
+   bas du panneau, qui ouvre l'éditeur à l'endroit affiché (compte gratuit).
+   Le chemin apparaît ensuite sur la carte et dans les itinéraires, en
+   général sous quelques jours, pour toi et pour tous les coureurs du coin.
 
 ## Utilisation
 
@@ -85,10 +87,9 @@ Deux façons de la donner à HARES RUN :
   Vitesse, temps à mi-parcours, heure d'arrivée et temps de passage à
   chaque km suivent.
 - **Exporter en PNG** : tracé, distance, temps prévu, allure, vitesse,
-  dénivelé, nombre d'étapes ; avec ou sans fond de carte Google.
+  dénivelé, nombre d'étapes ; avec ou sans fond de carte (celui choisi).
 
 Le parcours en cours est gardé dans le navigateur : il est là au retour.
 « Annuler » (ou Ctrl+Z) revient sur la dernière modification.
 
-Limite : 27 points par parcours (départ, arrivée et 25 étapes, le maximum
-de Google pour un trajet à pied).
+Limite : 50 points par parcours.

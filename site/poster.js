@@ -1,9 +1,9 @@
 /*
  * Image PNG d'un parcours (1080 × 1350).
  *
- * Le tracé est dessiné en projection Web Mercator. Avec le fond de carte,
- * l'image vient de Maps Static API, demandée avec le même centre et le même
- * zoom que notre projection : le tracé tombe sur les rues.
+ * Le tracé est dessiné en projection Web Mercator. Le fond de carte est
+ * recomposé à partir des tuiles du fond choisi dans l'appli (mêmes tuiles,
+ * même projection : le tracé tombe sur les rues).
  */
 window.HaresPoster = (() => {
   'use strict';
@@ -28,8 +28,6 @@ window.HaresPoster = (() => {
   // ---------- projection ----------
   const mx = lng => (lng + 180) / 360;
   const my = lat => { const s = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); };
-  const unLat = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y))) * 180 / Math.PI;
-  const unLng = x => x * 360 - 180;
 
   function frame(path, w, h, padFrac) {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -38,32 +36,7 @@ window.HaresPoster = (() => {
     return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, fit: Math.min(w * (1 - 2 * padFrac) / dx, h * (1 - 2 * padFrac) / dy) };
   }
 
-  // ---------- fond de carte (Maps Static API) ----------
-  const STATIC_STYLE = [
-    'element:geometry|color:0x1d1d1d',
-    'element:labels.text.fill|color:0x8c8c8c',
-    'element:labels.text.stroke|color:0x1d1d1d',
-    'element:labels.icon|visibility:off',
-    'feature:poi|visibility:off',
-    'feature:poi.park|element:geometry|visibility:on|color:0x1f2a1f',
-    'feature:road|element:geometry|color:0x333333',
-    'feature:road.highway|element:geometry|color:0x404040',
-    'feature:transit|visibility:off',
-    'feature:water|element:geometry|color:0x14191f',
-  ];
-
-  function staticMap(path, key) {
-    const lw = MAP.w / 2, lh = MAP.h / 2; // taille logique ; scale=2 donne la taille réelle
-    const f = frame(path, lw, lh, 0.12);
-    const zoom = Math.max(1, Math.min(18, Math.floor(Math.log2(f.fit / 256))));
-    // le zoom est entier : on agrandit un peu l'image (≤ 1,6×) pour que le tracé remplisse le cadre
-    const up = Math.max(1, Math.min(1.6, f.fit / (256 * 2 ** zoom)));
-    const url = 'https://maps.googleapis.com/maps/api/staticmap?' +
-      `center=${unLat(f.cy).toFixed(6)},${unLng(f.cx).toFixed(6)}&zoom=${zoom}&size=${lw}x${lh}&scale=2&maptype=roadmap&language=fr` +
-      STATIC_STYLE.map(s => '&style=' + encodeURIComponent(s)).join('') + '&key=' + encodeURIComponent(key);
-    return { url, up, project: { cx: f.cx, cy: f.cy, k: 256 * 2 ** zoom * 2 * up } };
-  }
-
+  // ---------- fond de carte à partir des tuiles ----------
   function loadImage(url, timeout = 10000) {
     if (imgCache.has(url)) return imgCache.get(url);
     const p = new Promise(resolve => {
@@ -77,6 +50,56 @@ window.HaresPoster = (() => {
     imgCache.set(url, p);
     p.then(img => { if (!img) imgCache.delete(url); });
     return p;
+  }
+
+  async function tileBackground(f, layer) {
+    const z = Math.max(1, Math.min(18, layer.maxZoom || 18, Math.floor(Math.log2(f.fit / 256))));
+    const n = 2 ** z, world = 256 * n, s = f.fit / world; // échelle tuile → image (≈ 1 à 2)
+    const left = f.cx * world - MAP.w / 2 / s, top = f.cy * world - MAP.h / 2 / s;
+    const tx0 = Math.floor(left / 256), tx1 = Math.floor((left + MAP.w / s) / 256);
+    const ty0 = Math.max(0, Math.floor(top / 256)), ty1 = Math.min(n - 1, Math.floor((top + MAP.h / s) / 256));
+    const subs = layer.subdomains || 'abc';
+
+    const off = document.createElement('canvas');
+    off.width = MAP.w; off.height = MAP.h;
+    const o = off.getContext('2d');
+    o.fillStyle = '#1d1d1d';
+    o.fillRect(0, 0, MAP.w, MAP.h);
+
+    const jobs = [];
+    for (let x = tx0; x <= tx1; x++) {
+      for (let y = ty0; y <= ty1; y++) {
+        const url = layer.url
+          .replace('{s}', subs[Math.abs(x + y) % subs.length])
+          .replace('{z}', z).replace('{x}', ((x % n) + n) % n).replace('{y}', y)
+          .replace('{r}', '@2x');
+        jobs.push(loadImage(url).then(img => {
+          if (img) o.drawImage(img, (x * 256 - left) * s, (y * 256 - top) * s, 256 * s + 1, 256 * s + 1);
+          return !!img;
+        }));
+      }
+    }
+    const ok = (await Promise.all(jobs)).filter(Boolean).length;
+    if (ok < jobs.length * 0.6) return null;
+
+    try {
+      const img = o.getImageData(0, 0, MAP.w, MAP.h), d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        let r = d[i], g = d[i + 1], b = d[i + 2];
+        if (layer.invert) {
+          // luminosité inversée, teintes conservées (fond OpenStreetMap clair → sombre)
+          const shift = 255 - 2 * (0.299 * r + 0.587 * g + 0.114 * b);
+          r = (r + shift) * 0.88; g = (g + shift) * 0.88; b = (b + shift) * 0.88;
+        } else if (/arcgis/.test(layer.url)) {
+          r *= 0.75; g *= 0.75; b *= 0.75; // satellite assombri pour que le tracé ressorte
+        }
+        d[i] = r; d[i + 1] = g; d[i + 2] = b;
+      }
+      o.putImageData(img, 0, 0);
+    } catch {
+      return null; // tuiles sans autorisation CORS : l'image serait inexportable
+    }
+    return off;
   }
 
   // ---------- utilitaires ----------
@@ -109,6 +132,22 @@ window.HaresPoster = (() => {
       }
     });
   }
+  /** Positions et orientations [x, y, angle] tous les `every` pixels le long du tracé. */
+  function arrowsAlong(pts, every) {
+    const out = [];
+    let acc = 0, next = every / 2;
+    for (let i = 1; i < pts.length; i++) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      const seg = Math.hypot(x1 - x0, y1 - y0);
+      while (seg > 0 && acc + seg >= next) {
+        const t = (next - acc) / seg;
+        out.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, Math.atan2(y1 - y0, x1 - x0)]);
+        next += every;
+      }
+      acc += seg;
+    }
+    return out;
+  }
 
   // ---------- rendu ----------
   async function render(canvas, d, opts) {
@@ -116,17 +155,9 @@ window.HaresPoster = (() => {
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
 
-    let bg = null, up = 1, proj;
-    if (opts.withMap && d.path.length > 1) {
-      const sm = staticMap(d.path, opts.apiKey);
-      bg = await loadImage(sm.url);
-      if (bg) { proj = sm.project; up = sm.up; }
-    }
-    if (!proj) {
-      const f = frame(d.path.length ? d.path : d.points, MAP.w, MAP.h, 0.1);
-      proj = { cx: f.cx, cy: f.cy, k: f.fit };
-    }
-    const P = p => [MAP.x + MAP.w / 2 + (mx(p.lng) - proj.cx) * proj.k, MAP.y + MAP.h / 2 + (my(p.lat) - proj.cy) * proj.k];
+    const f = frame(d.path.length ? d.path : d.points, MAP.w, MAP.h, 0.1);
+    const bg = opts.withMap && opts.layer && d.path.length > 1 ? await tileBackground(f, opts.layer) : null;
+    const P = p => [MAP.x + MAP.w / 2 + (mx(p.lng) - f.cx) * f.fit, MAP.y + MAP.h / 2 + (my(p.lat) - f.cy) * f.fit];
 
     ctx.fillStyle = C.bg;
     ctx.fillRect(0, 0, W, H);
@@ -152,7 +183,7 @@ window.HaresPoster = (() => {
     ctx.save();
     ctx.beginPath(); ctx.rect(MAP.x, MAP.y, MAP.w, MAP.h); ctx.clip();
     ctx.fillStyle = C.panel; ctx.fillRect(MAP.x, MAP.y, MAP.w, MAP.h);
-    if (bg) ctx.drawImage(bg, MAP.x + MAP.w * (1 - up) / 2, MAP.y + MAP.h * (1 - up) / 2, MAP.w * up, MAP.h * up);
+    if (bg) ctx.drawImage(bg, MAP.x, MAP.y);
 
     if (d.path.length > 1) {
       const pts = d.path.map(P);
@@ -211,27 +242,14 @@ window.HaresPoster = (() => {
     ctx.fillStyle = C.muted; ctx.font = `400 22px ${FONT}`;
     const end = d.points.find(p => p.role === 'finish');
     const route = d.loop ? 'Boucle, retour au départ' : end?.label ? 'Arrivée : ' + end.label : '';
-    ctx.fillText(ellipsis(ctx, route + (d.straight ? ' · distance à vol d’oiseau' : ''), 700), 40, 1310);
-    if (bg) { ctx.textAlign = 'right'; ctx.fillText('Carte © Google', W - 40, 1310); ctx.textAlign = 'left'; }
+    const credit = bg ? opts.layer.credit : '© OpenStreetMap';
+    ctx.textAlign = 'right';
+    ctx.fillText(credit, W - 40, 1310);
+    const cw = ctx.measureText(credit).width;
+    ctx.textAlign = 'left';
+    ctx.fillText(ellipsis(ctx, route + (d.straight ? ' · à vol d’oiseau' : ''), W - 120 - cw), 40, 1310);
 
     return { mapUsed: !!bg };
-  }
-
-  /** Positions et orientations [x, y, angle] tous les `every` pixels le long du tracé. */
-  function arrowsAlong(pts, every) {
-    const out = [];
-    let acc = 0, next = every / 2;
-    for (let i = 1; i < pts.length; i++) {
-      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
-      const seg = Math.hypot(x1 - x0, y1 - y0);
-      while (seg > 0 && acc + seg >= next) {
-        const t = (next - acc) / seg;
-        out.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, Math.atan2(y1 - y0, x1 - x0)]);
-        next += every;
-      }
-      acc += seg;
-    }
-    return out;
   }
 
   return { render };

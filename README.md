@@ -69,34 +69,45 @@ plus durable :
 ## Utilisation
 
 - **Clic sur la carte** : le premier clic place le départ (D), le deuxième
-  l'arrivée (A). Ensuite, chaque clic — sur la carte ou directement sur le
-  tracé — ajoute une **étape** (1, 2, 3…), insérée dans le tronçon où elle
-  allonge le moins le parcours. Les repères se déplacent en les faisant
-  glisser (y compris l'arrivée) ; la liste permet de les renommer,
-  réordonner, supprimer.
+  l'arrivée (A). Ensuite, chaque clic — sur la carte ou sur le tracé —
+  ajoute une **étape** (1, 2, 3…) dans le tronçon où elle allonge le moins
+  le parcours. Les repères se déplacent en les faisant glisser ; × dans la
+  liste supprime un point, un clic sur son nom centre la carte dessus.
 - Le **sens** du parcours est indiqué par des flèches le long du tracé, sur
   la carte comme sur l'image exportée.
-- **Position exacte** : « Ma position » et « Départ = ma position »
-  écoutent le GPS pendant quelques secondes et gardent la mesure la plus
-  précise (jusqu'à ±10 m, ou la meilleure obtenue en 12 s). La position,
-  ses coordonnées et la marge d'erreur s'affichent ; le cercle bleu sur la
-  carte montre cette marge.
-- Si la position n'arrive pas : vérifier que le site est autorisé à
-  utiliser la localisation (icône à gauche de l'adresse) et, sur un
-  ordinateur Windows, que la localisation est activée (Paramètres →
-  Confidentialité → Localisation). Sans GPS, un ordinateur se situe par le
-  Wi-Fi, à quelques dizaines de mètres près.
-- **Coordonnées GPS** : la recherche accepte aussi des coordonnées
-  (`5.33641, -4.02672`) pour placer un point au mètre près. Survoler la
-  pastille d'un point affiche les siennes.
-- **Boucle** : l'arrivée revient au départ.
-- **Allure** : saisir le temps prévu donne l'allure au km, et inversement.
-  Vitesse, temps à mi-parcours, heure d'arrivée et temps de passage à
-  chaque km suivent.
-- **Exporter en PNG** : tracé, distance, temps prévu, allure, vitesse,
-  dénivelé, nombre d'étapes ; avec ou sans fond de carte (celui choisi).
+- **Partir de ma position** place le départ sur la position de l'appareil :
+  le GPS est écouté quelques secondes et la mesure la plus précise est
+  gardée (jusqu'à ±10 m). La précision s'affiche ; le cercle bleu sur la
+  carte montre la marge d'erreur.
+- **Boucle** : l'arrivée revient au départ. **Suivre les chemins** décoché :
+  les points sont reliés en ligne droite.
+- **Allure** : saisir le temps prévu donne l'allure au km, et inversement,
+  avec la vitesse et l'heure d'arrivée.
+- **Exporter en PNG** : on y donne un nom au run ; l'image reprend tracé,
+  distance, temps prévu, allure, vitesse, dénivelé et nombre d'étapes, avec
+  ou sans fond de carte.
+- La recherche accepte un lieu ou des **coordonnées GPS** (`5.33641, -4.02672`).
 
 Le parcours en cours est gardé dans le navigateur : il est là au retour.
 « Annuler » (ou Ctrl+Z) revient sur la dernière modification.
+
+### Si la position n'arrive pas
+
+La position vient du navigateur, qui la demande au système. Un message
+« trop de temps » signifie que le navigateur n'a rien renvoyé :
+
+- **Sur ordinateur Windows** : Paramètres → Confidentialité et sécurité →
+  Localisation : activer « Services de localisation » **et** « Autoriser les
+  applications de bureau à accéder à votre position ». Sans GPS, un
+  ordinateur se situe par le Wi-Fi (à quelques dizaines de mètres) ; en
+  câble Ethernet, souvent pas du tout.
+- **Certains navigateurs** (Brave, Opera, Chromium sans services Google…)
+  n'ont pas de service de localisation : essayer Chrome, Edge ou Firefox.
+- **Sur téléphone** : activer la localisation et autoriser le navigateur ;
+  c'est là que le GPS donne une position précise.
+
+Test rapide : si Google Maps, dans le même navigateur, ne trouve pas non
+plus ta position, le blocage vient de l'appareil ou du navigateur, pas de
+HARES RUN.
 
 Limite : 50 points par parcours.

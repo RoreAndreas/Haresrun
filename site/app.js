@@ -99,12 +99,6 @@
   const nf2 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const nf1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const pad = n => String(n).padStart(2, '0');
-  function fmtDur(sec) {
-    if (!(sec > 0)) return '—';
-    sec = Math.round(sec);
-    const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
-    return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-  }
   const fmtPace = sec => (sec > 0 ? `${Math.floor(Math.round(sec) / 60)}:${pad(Math.round(sec) % 60)}` : '—');
   const km = () => (route ? route.distance / 1000 : 0);
 
@@ -210,20 +204,6 @@
   function removePoint(id) {
     snapshot();
     state.points = state.points.filter(p => p.id !== id);
-    refresh();
-  }
-  function movePoint(id, dir) {
-    const i = state.points.findIndex(p => p.id === id), j = i + dir;
-    if (i < 0 || j < 0 || j >= state.points.length) return;
-    snapshot();
-    [state.points[i], state.points[j]] = [state.points[j], state.points[i]];
-    refresh();
-  }
-  function reverse() {
-    if (state.points.length < 2) return;
-    snapshot();
-    if (state.loop) state.points = [state.points[0], ...state.points.slice(1).reverse()];
-    else state.points.reverse();
     refresh();
   }
   function clearAll() {
@@ -382,7 +362,6 @@
       drawRoute(); renderStats();
       return;
     }
-    $('#busy').hidden = false;
     let r = null;
     if (state.follow) {
       try { r = await osrmRoute(s); } catch (e) { console.warn('Itinéraire :', e.message); }
@@ -391,7 +370,6 @@
     const failed = state.follow && !r;
     if (!r) r = straightRoute(s);
     route = r; elevation = null;
-    $('#busy').hidden = true;
     drawRoute(); renderStats();
     if (fitAfter) fitAll();
     if (failed && !warnedStraight) {
@@ -536,9 +514,6 @@
   function setMyPos(pos) {
     myPos = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
     showMe();
-    const el = $('#gps');
-    el.hidden = false;
-    el.textContent = `Ta position : ${myPos.lat.toFixed(5)}, ${myPos.lng.toFixed(5)} (précision ±${Math.round(myPos.acc)} m)`;
   }
 
   // le suivi continu alimente aussi les recherches de position précise en cours
@@ -631,49 +606,25 @@
     ol.innerHTML = '';
     const n = state.points.length;
     $('#hint').textContent = n === 0 ? 'Clique sur la carte pour placer le départ.'
-      : n === 1 ? (state.loop ? 'Clique sur la carte pour ajouter des étapes : la boucle revient au départ.' : 'Clique sur la carte pour placer l’arrivée.')
-        : 'Clique sur la carte ou sur le tracé pour ajouter une étape. Fais glisser les repères pour les déplacer.';
-    const legs = route && route.legs.length === stops().length - 1 ? route.legs : null;
+      : n === 1 && !state.loop ? 'Clique pour placer l’arrivée.'
+        : 'Clique sur la carte ou le tracé pour ajouter une étape.';
     state.points.forEach((p, i) => {
       const li = document.createElement('li');
       li.className = `pt pt--${role(i)}`;
-      li.innerHTML = `<button class="pt__badge" type="button"></button>
-        <div class="pt__body"><small></small><input class="pt__name" type="text" maxlength="60" placeholder="Localisation…"></div>
-        <div class="pt__acts">
-          <button type="button" data-m="-1" title="Monter">↑</button>
-          <button type="button" data-m="1" title="Descendre">↓</button>
-          <button type="button" data-del title="Supprimer">×</button>
-        </div>`;
-      const badge = li.querySelector('.pt__badge');
-      badge.textContent = badgeText(i);
-      badge.title = `Centrer la carte — ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`;
-      badge.onclick = () => map && map.panTo([p.lat, p.lng]);
-      li.querySelector('small').textContent = roleLabel(i);
-      if (legs && i > 0) li.querySelector('small').insertAdjacentHTML('beforeend', `<span class="leg">· ${nf2.format(legs[i - 1] / 1000)} km</span>`);
-      const input = li.querySelector('.pt__name');
-      input.value = p.label || '';
-      input.addEventListener('change', () => { p.label = input.value.trim(); save(); renderMarkers(); });
-      li.querySelector('[data-m="-1"]').disabled = i === 0;
-      li.querySelector('[data-m="1"]').disabled = i === n - 1;
-      li.querySelectorAll('[data-m]').forEach(b => (b.onclick = () => movePoint(p.id, +b.dataset.m)));
-      li.querySelector('[data-del]').onclick = () => removePoint(p.id);
+      li.innerHTML = '<span class="pt__badge"></span><span class="pt__name"></span><button class="pt__del" type="button" title="Supprimer">×</button>';
+      li.querySelector('.pt__badge').textContent = badgeText(i);
+      const name = li.querySelector('.pt__name');
+      name.textContent = p.label || '…';
+      name.title = `${roleLabel(i)} — ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}`;
+      name.onclick = () => map && map.panTo([p.lat, p.lng]);
+      li.querySelector('.pt__del').onclick = () => removePoint(p.id);
       ol.appendChild(li);
     });
-    if (state.loop && legs) {
-      const li = document.createElement('li');
-      li.className = 'pt muted small';
-      li.textContent = `Retour au départ · ${nf2.format(legs[legs.length - 1] / 1000)} km`;
-      ol.appendChild(li);
-    }
   }
 
   function renderStats() {
-    const d = km();
-    $('#st-dist').textContent = nf2.format(d);
-    $('#st-stops').textContent = Math.max(0, state.points.length - (state.loop ? 1 : 2));
-    $('#st-gain').textContent = elevation ? `${Math.round(elevation.gain)} m` : '—';
-    $('#st-source').hidden = !route || route.source !== 'straight';
-    $('#st-source').textContent = state.follow ? 'Distance à vol d’oiseau (itinéraire indisponible).' : 'Tracé libre : distance à vol d’oiseau entre les points.';
+    $('#st-dist').textContent = nf2.format(km());
+    $('#st-gain').textContent = elevation ? `D+ ${Math.round(elevation.gain)} m` : '';
     renderPoints();
     updatePace();
   }
@@ -703,20 +654,10 @@
       paceInputs[1].value = p ? pad(p % 60) : '';
     }
     const pace = state.paceSec, total = d > 0 ? state.targetSec : null;
-    $('#speed').textContent = pace ? nf1.format(3600 / pace) + ' km/h' : '—';
-    $('#half').textContent = total ? fmtDur(total / 2) : '—';
-    $('#eta').textContent = total ? new Date(Date.now() + total * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : '—';
+    $('#pace-out').textContent = pace && total
+      ? `${nf1.format(3600 / pace)} km/h · arrivée vers ${new Date(Date.now() + total * 1000).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`
+      : '';
     $('#summary').textContent = `${nf2.format(d)} km` + (pace ? ` · ${fmtPace(pace)} /km` : '');
-
-    const tbl = $('#splits');
-    tbl.innerHTML = '';
-    if (pace && d > 0) {
-      const full = Math.floor(d);
-      for (let i = 1; i <= Math.min(full, 200); i++) tbl.insertAdjacentHTML('beforeend', `<tr><th>km ${i}</th><td>${fmtDur(i * pace)}</td></tr>`);
-      if (d - full > 0.01) tbl.insertAdjacentHTML('beforeend', `<tr><th>Arrivée (${nf2.format(d)} km)</th><td>${fmtDur(d * pace)}</td></tr>`);
-    } else {
-      tbl.innerHTML = '<tr><th>Trace un parcours et indique un temps ou une allure.</th></tr>';
-    }
   }
 
   timeInputs.forEach(el => el.addEventListener('input', () => {
@@ -792,7 +733,11 @@
 
   function bindUI() {
     $('#run-name').value = state.name;
-    $('#run-name').addEventListener('input', e => { state.name = e.target.value; save(); });
+    let nameTimer;
+    $('#run-name').addEventListener('input', e => {
+      state.name = e.target.value; save();
+      clearTimeout(nameTimer); nameTimer = setTimeout(renderPoster, 300);
+    });
     $('#loop').checked = state.loop;
     $('#loop').addEventListener('change', e => { snapshot(); state.loop = e.target.checked; refresh(); });
     $('#follow').checked = state.follow;
@@ -804,9 +749,8 @@
     $('#with-map').addEventListener('change', e => { state.withMap = e.target.checked; save(); renderPoster(); });
 
     const actions = {
-      locate: () => locate(false),
       'start-here': () => locate(true),
-      fit: fitAll, undo, clear: clearAll, reverse,
+      undo, clear: clearAll,
       'toggle-sheet': () => {
         const c = $('#panel').classList.toggle('is-collapsed');
         document.body.classList.toggle('sheet-collapsed', c);

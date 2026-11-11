@@ -23,8 +23,6 @@
       <option value="light">Claire</option>
       <option value="satellite">Satellite</option>
     </select>
-    <button class="btn" data-action="locate">Ma position</button>
-    <button class="btn" data-action="fit">Recentrer</button>
     <button class="btn" data-action="undo">Annuler</button>
     <button class="btn" data-action="clear">Effacer</button>
   </div>
@@ -38,73 +36,44 @@
 
     <div class="panel__scroll">
       <form id="search" class="search" autocomplete="off">
-        <input id="search-input" type="search" placeholder="Chercher un lieu ou des coordonnées GPS" enterkeyhint="search">
-        <button type="submit" class="btn">OK</button>
+        <input id="search-input" type="search" placeholder="Chercher un lieu" enterkeyhint="search">
       </form>
       <ul id="search-results" class="results" hidden></ul>
 
       <section class="block">
-        <h2>Parcours</h2>
-        <input id="run-name" class="input" type="text" maxlength="40" placeholder="Nom du run">
         <p id="hint" class="muted"></p>
         <ol id="points" class="points"></ol>
-        <label class="check"><input id="loop" type="checkbox"> Boucle (retour au départ)</label>
-        <label class="check" title="Décoche pour relier les points en ligne droite : piste, plage, sentier absent de la carte"><input id="follow" type="checkbox"> Suivre les chemins</label>
-        <div class="row">
-          <button class="btn" data-action="start-here">Départ = ma position</button>
-          <button class="btn" data-action="reverse">Inverser</button>
+        <button class="btn btn--block" data-action="start-here">Partir de ma position</button>
+        <div class="row row--between">
+          <label class="check"><input id="loop" type="checkbox"> Boucle</label>
+          <label class="check" title="Décoche pour relier les points en ligne droite (sentier absent de la carte)"><input id="follow" type="checkbox"> Suivre les chemins</label>
         </div>
-        <p id="gps" class="muted small" hidden></p>
       </section>
 
       <section class="block">
-        <h2>Distance</h2>
-        <table class="kv">
-          <tr><th>Distance</th><td><b id="st-dist">0,00</b> km</td></tr>
-          <tr><th>Dénivelé +</th><td><span id="st-gain">—</span></td></tr>
-          <tr><th>Étapes</th><td id="st-stops">0</td></tr>
-        </table>
-        <p id="st-source" class="muted" hidden></p>
-        <p id="busy" class="muted" hidden>Calcul de l'itinéraire…</p>
-      </section>
-
-      <section class="block">
-        <h2>Allure</h2>
-        <p class="muted">Indique le temps prévu pour obtenir l'allure, ou l'inverse.</p>
-        <div class="field">
-          <span>Temps prévu</span>
-          <div class="field__inputs">
-            <input id="t-h" type="number" min="0" max="99" inputmode="numeric" placeholder="0"> h
-            <input id="t-m" type="number" min="0" max="59" inputmode="numeric" placeholder="00"> min
-            <input id="t-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00"> s
+        <p class="total"><b id="st-dist">0,00</b> km <span id="st-gain" class="muted"></span></p>
+        <div class="pace">
+          <div class="field">
+            <span>Temps prévu</span>
+            <div class="field__inputs">
+              <input id="t-h" type="number" min="0" max="99" inputmode="numeric" placeholder="0" aria-label="heures"> h
+              <input id="t-m" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="minutes"> min
+              <input id="t-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="secondes"> s
+            </div>
+          </div>
+          <div class="field">
+            <span>Allure par km</span>
+            <div class="field__inputs">
+              <input id="p-m" type="number" min="0" max="59" inputmode="numeric" placeholder="5" aria-label="minutes"> :
+              <input id="p-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="secondes">
+            </div>
           </div>
         </div>
-        <div class="field">
-          <span>Allure</span>
-          <div class="field__inputs">
-            <input id="p-m" type="number" min="0" max="59" inputmode="numeric" placeholder="5"> :
-            <input id="p-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00"> /km
-          </div>
-        </div>
-        <table class="kv">
-          <tr><th>Vitesse</th><td id="speed">—</td></tr>
-          <tr><th>Mi-parcours</th><td id="half">—</td></tr>
-          <tr><th>Arrivée prévue</th><td id="eta">—</td></tr>
-        </table>
-        <details class="splits">
-          <summary>Temps de passage par km</summary>
-          <table class="kv" id="splits"></table>
-        </details>
+        <p id="pace-out" class="muted"></p>
       </section>
 
-      <section class="block">
-        <button class="btn btn--accent btn--block" data-action="open-export">Exporter en PNG</button>
-      </section>
-
-      <div class="foot-links small">
-        <a id="osm-edit" href="https://www.openstreetmap.org/edit" target="_blank" rel="noopener">Un chemin manque ? L'ajouter sur OpenStreetMap</a>
-        <span class="muted">Carte © les contributeurs OpenStreetMap</span>
-      </div>
+      <button class="btn btn--accent btn--block export-btn" data-action="open-export">Exporter en PNG</button>
+      <a id="osm-edit" class="osm-edit small" href="https://www.openstreetmap.org/edit" target="_blank" rel="noopener">Un chemin manque ? L'ajouter sur OpenStreetMap</a>
     </div>
   </aside>
 
@@ -113,6 +82,7 @@
       <canvas id="poster" width="1080" height="1350"></canvas>
       <div class="export__opts">
         <h2>Exporter en PNG</h2>
+        <input id="run-name" class="input" type="text" maxlength="40" placeholder="Nom du run">
         <label class="check"><input id="with-map" type="checkbox"> Fond de carte</label>
         <p id="export-note" class="muted small"></p>
         <button class="btn btn--accent btn--block" data-action="download">Télécharger</button>

@@ -96,7 +96,7 @@ a { color: var(--accent); }
 .block { padding: 14px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
 .block h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 
-.search { display: flex; gap: 6px; padding-top: 14px; }
+.search { display: flex; padding-top: 14px; }
 .search input { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid var(--line); border-radius: 4px; background: var(--field); outline: none; }
 .results { list-style: none; margin: 6px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 4px; }
 .results li { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-top: 1px solid var(--line); }
@@ -109,43 +109,39 @@ a { color: var(--accent); }
 
 /* points */
 .points { list-style: none; margin: 0; padding: 0; }
-.pt { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.points:empty { display: none; }
+.pt { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); }
 .pt:first-child { border-top: 0; }
 .pt__badge {
-  flex: none; width: 24px; height: 24px; border-radius: 50%; border: 0; cursor: pointer;
-  font-size: 12px; font-weight: 700; color: #fff; display: grid; place-items: center;
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  font-size: 11px; font-weight: 700; color: #fff; display: grid; place-items: center;
 }
 .pt--start .pt__badge { background: var(--start); }
 .pt--via .pt__badge { background: var(--via); }
 .pt--finish .pt__badge { background: var(--finish); }
-.pt__body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.pt__body small { color: var(--muted); font-size: 11px; }
-.pt__body small .leg { margin-left: 6px; }
-.pt__name { border: 0; border-bottom: 1px solid transparent; background: transparent; padding: 1px 0; outline: none; min-width: 0; }
-.pt__name:focus { border-bottom-color: var(--accent); }
-.pt__acts { display: flex; }
-.pt__acts button { width: 24px; height: 24px; border: 0; background: none; color: var(--muted); cursor: pointer; border-radius: 3px; }
-.pt__acts button:hover { color: var(--text); background: var(--field); }
-.pt__acts button:disabled { visibility: hidden; }
+.pt__name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.pt__del { width: 24px; height: 24px; border: 0; background: none; color: var(--muted); cursor: pointer; border-radius: 3px; font-size: 16px; }
+.pt__del:hover { color: var(--text); background: var(--field); }
 
-/* tableaux clé / valeur */
-.kv { width: 100%; border-collapse: collapse; }
-.kv th { text-align: left; font-weight: 400; color: var(--muted); padding: 3px 0; }
-.kv td { text-align: right; padding: 3px 0; font-variant-numeric: tabular-nums; }
-.kv b { font-size: 20px; }
-
-/* allure */
+/* distance et allure */
+.total { margin: 0; }
+.total b { font-size: 28px; font-variant-numeric: tabular-nums; }
+.total .muted { margin-left: 8px; }
+.pace { display: flex; flex-wrap: wrap; gap: 12px 20px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
-.field > span { color: var(--muted); }
-.field__inputs { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.field > span { color: var(--muted); font-size: 12px; }
+.field__inputs { display: flex; align-items: center; gap: 4px; color: var(--muted); }
 .field input {
-  width: 52px; padding: 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--field);
+  width: 44px; padding: 6px 4px; border: 1px solid var(--line); border-radius: 4px; background: var(--field);
   color: var(--text); text-align: center; font-variant-numeric: tabular-nums; outline: none;
   -moz-appearance: textfield; appearance: textfield;
 }
 .field input::-webkit-outer-spin-button, .field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.splits summary { cursor: pointer; color: var(--muted); }
-.splits .kv { margin-top: 6px; }
+#pace-out:empty { display: none; }
+
+.export-btn { margin-top: 14px; }
+.osm-edit { display: block; text-align: center; padding: 12px 0 4px; color: var(--muted); }
+.row--between { justify-content: space-between; }
 
 /* ---------- dialogues ---------- */
 .dialog {

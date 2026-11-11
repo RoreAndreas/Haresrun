@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#121212">
+  <title>HARES RUN</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="map" aria-label="Carte"></div>
+  <div id="map-empty" class="map-empty" hidden>
+    <p>La carte a besoin d'une clé Google Maps.</p>
+    <button class="btn btn--accent" data-action="open-key">Saisir la clé</button>
+  </div>
+
+  <div class="map-tools" role="toolbar" aria-label="Outils de carte">
+    <button class="btn" data-action="locate">Ma position</button>
+    <button class="btn" data-action="fit">Recentrer</button>
+    <button class="btn" data-action="undo">Annuler</button>
+    <button class="btn" data-action="clear">Effacer</button>
+  </div>
+
+  <aside id="panel" class="panel">
+    <header class="head">
+      <button class="head__toggle" data-action="toggle-sheet" aria-label="Agrandir ou réduire le panneau"></button>
+      <h1>HARES RUN</h1>
+      <span class="head__sum" id="summary">0,00 km</span>
+      <button class="link" data-action="open-key">Clé API</button>
+    </header>
+
+    <div class="panel__scroll">
+      <form id="search" class="search" autocomplete="off">
+        <input id="search-input" type="search" placeholder="Chercher un lieu ou des coordonnées GPS" enterkeyhint="search">
+        <button type="submit" class="btn">OK</button>
+      </form>
+      <ul id="search-results" class="results" hidden></ul>
+
+      <section class="block">
+        <h2>Parcours</h2>
+        <input id="run-name" class="input" type="text" maxlength="40" placeholder="Nom du run">
+        <p id="hint" class="muted"></p>
+        <ol id="points" class="points"></ol>
+        <label class="check"><input id="loop" type="checkbox"> Boucle (retour au départ)</label>
+        <div class="row">
+          <button class="btn" data-action="start-here">Départ = ma position</button>
+          <button class="btn" data-action="reverse">Inverser</button>
+        </div>
+        <p id="gps" class="muted small" hidden></p>
+      </section>
+
+      <section class="block">
+        <h2>Distance</h2>
+        <table class="kv">
+          <tr><th>Distance</th><td><b id="st-dist">0,00</b> km</td></tr>
+          <tr><th>Dénivelé +</th><td><span id="st-gain">—</span></td></tr>
+          <tr><th>Étapes</th><td id="st-stops">0</td></tr>
+        </table>
+        <p id="st-source" class="muted" hidden></p>
+        <p id="busy" class="muted" hidden>Calcul de l'itinéraire…</p>
+      </section>
+
+      <section class="block">
+        <h2>Allure</h2>
+        <p class="muted">Indique le temps prévu pour obtenir l'allure, ou l'inverse.</p>
+        <div class="field">
+          <span>Temps prévu</span>
+          <div class="field__inputs">
+            <input id="t-h" type="number" min="0" max="99" inputmode="numeric" placeholder="0"> h
+            <input id="t-m" type="number" min="0" max="59" inputmode="numeric" placeholder="00"> min
+            <input id="t-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00"> s
+          </div>
+        </div>
+        <div class="field">
+          <span>Allure</span>
+          <div class="field__inputs">
+            <input id="p-m" type="number" min="0" max="59" inputmode="numeric" placeholder="5"> :
+            <input id="p-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00"> /km
+          </div>
+        </div>
+        <table class="kv">
+          <tr><th>Vitesse</th><td id="speed">—</td></tr>
+          <tr><th>Mi-parcours</th><td id="half">—</td></tr>
+          <tr><th>Arrivée prévue</th><td id="eta">—</td></tr>
+        </table>
+        <details class="splits">
+          <summary>Temps de passage par km</summary>
+          <table class="kv" id="splits"></table>
+        </details>
+      </section>
+
+      <section class="block">
+        <button class="btn btn--accent btn--block" data-action="open-export">Exporter en PNG</button>
+      </section>
+
+      <p class="muted small">Données cartographiques © Google.</p>
+    </div>
+  </aside>
+
+  <dialog id="key-dialog" class="dialog">
+    <form method="dialog" id="key-form">
+      <h2>Clé Google Maps</h2>
+      <p>HARES RUN utilise ta propre clé Google Maps. Elle reste dans ce navigateur.</p>
+      <ol class="small">
+        <li>Crée une clé dans la <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>.</li>
+        <li>Active : Maps JavaScript API, Routes API, Geocoding API, Places API (New), Elevation API, Maps Static API.</li>
+        <li>Restreins la clé à ton site (référents HTTP).</li>
+      </ol>
+      <input id="key-input" class="input" type="text" spellcheck="false" placeholder="AIza…" required autofocus>
+      <p id="key-error" class="error small" hidden></p>
+      <div class="row row--end">
+        <button type="button" class="btn" data-action="forget-key">Oublier la clé</button>
+        <button type="submit" class="btn btn--accent">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="export-dialog" class="dialog dialog--wide">
+    <div class="export">
+      <canvas id="poster" width="1080" height="1350"></canvas>
+      <div class="export__opts">
+        <h2>Exporter en PNG</h2>
+        <label class="check"><input id="with-map" type="checkbox"> Fond de carte Google</label>
+        <p id="export-note" class="muted small"></p>
+        <button class="btn btn--accent btn--block" data-action="download">Télécharger</button>
+        <button class="btn btn--block" data-action="close-export">Fermer</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="config.js"></script>
+  <script src="poster.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

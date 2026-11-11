@@ -37,8 +37,8 @@ directement (`file://`) ne la donnerait pas.
 
 | Fonction | Service | Remarque |
 |---|---|---|
-| Carte « Sombre » | tuiles CARTO Dark | données OpenStreetMap |
-| Carte « Détaillé » | tuiles OpenStreetMap standard, assombries | le plus de détails : sentiers, pistes, bâtiments |
+| Carte « Sombre » | tuiles OpenStreetMap standard, assombries | la plus détaillée : sentiers, pistes, bâtiments |
+| Carte « Clair » | tuiles OpenStreetMap standard | les mêmes, en couleurs d'origine |
 | Carte « Satellite » | imagerie Esri World Imagery | pour repérer ce qui n'est pas sur la carte |
 | Itinéraire piéton | OSRM de FOSSGIS (`routing.openstreetmap.de`) | ligne droite si indisponible |
 | Recherche, nom des points | Nominatim (OpenStreetMap), Photon en secours | une requête par seconde au plus |
@@ -54,8 +54,8 @@ OpenStreetMap est fait par ses utilisateurs : selon les quartiers, un
 sentier ou une piste peut manquer. Trois solutions, de la plus rapide à la
 plus durable :
 
-1. **Changer de fond** (menu en haut à droite) : « Détaillé » montre bien
-   plus de chemins que « Sombre », « Satellite » montre le terrain réel.
+1. **Changer de fond** (menu en haut à droite) : « Clair » est parfois plus
+   lisible pour les petits chemins, « Satellite » montre le terrain réel.
 2. **Décocher « Suivre les chemins »** : les points sont reliés en ligne
    droite, pour courir là où la carte ne connaît pas de chemin. Avec la vue
    satellite et des étapes rapprochées, le tracé suit le vrai sentier.

@@ -6,7 +6,7 @@
  * au départ et tous les points ajoutés sont des étapes.
  *
  * Services gratuits, sans clé :
- *   carte       Leaflet + tuiles CARTO (sombre), OpenStreetMap (détaillé), Esri (satellite)
+ *   carte       Leaflet + tuiles OpenStreetMap (sombre ou claire), Esri (satellite)
  *   itinéraire  OSRM piéton de FOSSGIS (routing.openstreetmap.de), ligne droite en secours
  *   recherche   Nominatim (OpenStreetMap), Photon en secours
  *   altitude    Open-Meteo
@@ -21,13 +21,15 @@
   const COLORS = { route: '#ff7a1a', start: '#3fa34d', via: '#6b6b6b', finish: '#d64545' };
   const MAX_POINTS = 50;
   const OSM_COPY = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+  // Fonds de carte gratuits et sans clé. « Sombre » est la carte OpenStreetMap
+  // standard (la plus détaillée), inversée à l'affichage pour le thème sombre.
   const LAYERS = {
     dark: {
-      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', subdomains: 'abcd', maxZoom: 20,
-      attribution: OSM_COPY + ' &copy; <a href="https://carto.com/attributions">CARTO</a>', credit: '© OpenStreetMap · © CARTO',
-    },
-    detail: {
       url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, invert: true,
+      attribution: OSM_COPY, credit: '© OpenStreetMap',
+    },
+    light: {
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19,
       attribution: OSM_COPY, credit: '© OpenStreetMap',
     },
     satellite: {
@@ -261,7 +263,7 @@
       subdomains: l.subdomains || 'abc', maxZoom: l.maxZoom, maxNativeZoom: Math.min(l.maxZoom, 19),
       attribution: l.attribution, crossOrigin: true,
     }).addTo(map);
-    document.body.classList.toggle('layer-detail', !!l.invert);
+    document.body.classList.toggle('layer-invert', !!l.invert);
   }
 
   function updateEditLink() {

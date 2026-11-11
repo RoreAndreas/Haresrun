@@ -39,8 +39,8 @@ a { color: var(--accent); }
 
 /* ---------- Leaflet ---------- */
 .leaflet-container { background: #1d1d1d; font: inherit; }
-/* fond « Détaillé » : tuiles OpenStreetMap claires, assombries à l'affichage */
-.layer-detail .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.92); }
+/* fond « Sombre » : tuiles OpenStreetMap claires, assombries à l'affichage */
+.layer-invert .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.88) contrast(.9) saturate(.7); }
 .leaflet-control-attribution { background: rgba(18,18,18,.8) !important; color: var(--muted); }
 .leaflet-control-attribution a { color: #bbb; }
 .leaflet-bar a { background: var(--panel); color: var(--text); border-bottom-color: var(--line); }

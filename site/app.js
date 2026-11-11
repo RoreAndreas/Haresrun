@@ -6,7 +6,7 @@
  * au départ et tous les points ajoutés sont des étapes.
  *
  * Services gratuits, sans clé :
- *   carte       Leaflet + tuiles OpenStreetMap (sombre ou claire), Esri (satellite)
+ *   carte       Leaflet + tuiles OpenStreetMap (complète), Esri (simplifiée, satellite)
  *   itinéraire  OSRM piéton de FOSSGIS (routing.openstreetmap.de), ligne droite en secours
  *   recherche   Nominatim (OpenStreetMap), Photon en secours
  *   altitude    Open-Meteo
@@ -21,19 +21,29 @@
   const COLORS = { route: '#ff7a1a', start: '#3fa34d', via: '#6b6b6b', finish: '#d64545' };
   const MAX_POINTS = 50;
   const OSM_COPY = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
-  // Fonds de carte gratuits et sans clé. « Sombre » est la carte OpenStreetMap
-  // standard (la plus détaillée), inversée à l'affichage pour le thème sombre.
+  // Fonds de carte gratuits et sans clé.
+  //   simple    fond gris foncé épuré d'Esri (rues principales, noms) — maxNative 16
+  //   dark      carte OpenStreetMap complète, inversée à l'affichage
+  //   light     la même en couleurs d'origine
+  //   satellite imagerie Esri
+  const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/';
   const LAYERS = {
+    simple: {
+      url: ESRI + 'Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      overlay: ESRI + 'Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+      maxZoom: 19, maxNative: 16,
+      attribution: 'Fond &copy; Esri, HERE, Garmin, ' + OSM_COPY, credit: '© Esri, HERE, Garmin, OpenStreetMap',
+    },
     dark: {
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, invert: true,
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, maxNative: 19, invert: true,
       attribution: OSM_COPY, credit: '© OpenStreetMap',
     },
     light: {
-      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19,
+      url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', maxZoom: 19, maxNative: 19,
       attribution: OSM_COPY, credit: '© OpenStreetMap',
     },
     satellite: {
-      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 19,
+      url: ESRI + 'World_Imagery/MapServer/tile/{z}/{y}/{x}', maxZoom: 19, maxNative: 19,
       attribution: 'Imagerie &copy; Esri, Maxar, Earthstar Geographics', credit: 'Imagerie © Esri, Maxar',
     },
   };
@@ -259,10 +269,10 @@
     $('#layer').value = state.layer;
     const l = LAYERS[state.layer];
     if (tiles) tiles.remove();
-    tiles = L.tileLayer(l.url, {
-      subdomains: l.subdomains || 'abc', maxZoom: l.maxZoom, maxNativeZoom: Math.min(l.maxZoom, 19),
-      attribution: l.attribution, crossOrigin: true,
-    }).addTo(map);
+    const opts = { subdomains: l.subdomains || 'abc', maxZoom: l.maxZoom, maxNativeZoom: l.maxNative, crossOrigin: true };
+    tiles = L.layerGroup([L.tileLayer(l.url, { ...opts, attribution: l.attribution })]);
+    if (l.overlay) tiles.addLayer(L.tileLayer(l.overlay, opts));
+    tiles.addTo(map);
     document.body.classList.toggle('layer-invert', !!l.invert);
   }
 
@@ -551,12 +561,17 @@
    */
   function bestPosition(target = 10, maxWait = 12000, quiet = false) {
     return new Promise((resolve, reject) => {
-      let best = null, id = null, timer = null;
+      let best = null, id = null, timer = null, lastErr = null;
       const finish = err => {
         if (id != null) navigator.geolocation.clearWatch(id);
         clearTimeout(timer);
         fixListeners.delete(consider);
-        if (err) reject(err); else if (best) resolve(best); else reject({ code: 3 });
+        if (best) return resolve(best);
+        if (err) return reject(err);
+        // rien en haute précision (ordinateur sans GPS, service de localisation
+        // lent…) : dernière chance en précision normale, position récente acceptée
+        navigator.geolocation.getCurrentPosition(resolve, e => reject(e || lastErr || { code: 3 }),
+          { enableHighAccuracy: false, maximumAge: 300000, timeout: 10000 });
       };
       function consider(pos) {
         if (!best || pos.coords.accuracy < best.coords.accuracy) best = pos;
@@ -568,7 +583,7 @@
       timer = setTimeout(() => finish(), maxWait);
       id = navigator.geolocation.watchPosition(
         consider,
-        err => { if (err.code === 1) finish(err); },
+        err => { lastErr = err; if (err.code === 1) finish(err); },
         { enableHighAccuracy: true, maximumAge: 0, timeout: maxWait }
       );
       // une mesure toute récente du suivi continu sert de point de départ
@@ -576,13 +591,23 @@
     });
   }
 
+  function geoErrorText(err) {
+    if (!window.isSecureContext) return 'La localisation exige une adresse en https:// (ou localhost).';
+    if (err.code === 1) return 'Localisation refusée : autorise-la pour ce site (icône à gauche de l’adresse), puis réessaie.';
+    if (err.code === 2) return 'Position indisponible : active la localisation de l’appareil (sur Windows : Paramètres → Confidentialité → Localisation), puis réessaie.';
+    return 'La position met trop de temps à arriver. Réessaie, ou clique sur la carte.';
+  }
+
+  // Une demande explicite (bouton) remplace celle, silencieuse, du démarrage.
+  let locateRun = 0;
   async function locate(asStart, quiet = false) {
     if (!navigator.geolocation) return quiet || toast('Cet appareil ne fournit pas sa position');
-    if (locating) return;
+    const run = ++locateRun;
     locating = true;
-    if (!quiet) toast('Localisation en cours…', 12000);
+    if (!quiet) toast('Localisation en cours…', 25000);
     try {
       const pos = await bestPosition(10, quiet ? 6000 : 12000, quiet);
+      if (run !== locateRun) return;
       setMyPos(pos);
       if (map) map.setView(myPos, Math.max(map.getZoom(), quiet ? 15 : 17));
       if (asStart) setStart(myPos.lat, myPos.lng);
@@ -592,12 +617,11 @@
           (acc > 50 ? '. Active le GPS ou mets-toi à découvert pour plus de précision.' : ''), 5000);
       }
     } catch (err) {
-      if (!quiet || err.code === 1) {
-        toast(err.code === 1 ? 'Localisation refusée. Autorise-la dans le navigateur, ou clique sur la carte.'
-          : 'Position introuvable pour le moment. Clique sur la carte.', 5000);
-      }
+      if (run !== locateRun) return;
+      console.warn('Localisation :', err.code, err.message);
+      if (!quiet || err.code === 1) toast(geoErrorText(err), 8000);
     } finally {
-      locating = false;
+      if (run === locateRun) locating = false;
     }
   }
 

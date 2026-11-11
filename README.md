@@ -37,8 +37,9 @@ directement (`file://`) ne la donnerait pas.
 
 | Fonction | Service | Remarque |
 |---|---|---|
-| Carte « Sombre » | tuiles OpenStreetMap standard, assombries | la plus détaillée : sentiers, pistes, bâtiments |
-| Carte « Clair » | tuiles OpenStreetMap standard | les mêmes, en couleurs d'origine |
+| Carte « Simplifiée » | fond gris foncé Esri (World Dark Gray Canvas) | épurée : rues principales et noms, rien d'autre |
+| Carte « Complète » | tuiles OpenStreetMap standard, assombries | la plus détaillée : sentiers, pistes, bâtiments, commerces |
+| Carte « Claire » | tuiles OpenStreetMap standard | la complète, en couleurs d'origine |
 | Carte « Satellite » | imagerie Esri World Imagery | pour repérer ce qui n'est pas sur la carte |
 | Itinéraire piéton | OSRM de FOSSGIS (`routing.openstreetmap.de`) | ligne droite si indisponible |
 | Recherche, nom des points | Nominatim (OpenStreetMap), Photon en secours | une requête par seconde au plus |
@@ -54,8 +55,9 @@ OpenStreetMap est fait par ses utilisateurs : selon les quartiers, un
 sentier ou une piste peut manquer. Trois solutions, de la plus rapide à la
 plus durable :
 
-1. **Changer de fond** (menu en haut à droite) : « Clair » est parfois plus
-   lisible pour les petits chemins, « Satellite » montre le terrain réel.
+1. **Changer de fond** (menu en haut à droite) : « Complète » montre tous
+   les chemins connus, « Satellite » montre le terrain réel. À l'inverse,
+   « Simplifiée » allège la carte quand il y a trop de détails.
 2. **Décocher « Suivre les chemins »** : les points sont reliés en ligne
    droite, pour courir là où la carte ne connaît pas de chemin. Avec la vue
    satellite et des étapes rapprochées, le tracé suit le vrai sentier.
@@ -79,6 +81,11 @@ plus durable :
   précise (jusqu'à ±10 m, ou la meilleure obtenue en 12 s). La position,
   ses coordonnées et la marge d'erreur s'affichent ; le cercle bleu sur la
   carte montre cette marge.
+- Si la position n'arrive pas : vérifier que le site est autorisé à
+  utiliser la localisation (icône à gauche de l'adresse) et, sur un
+  ordinateur Windows, que la localisation est activée (Paramètres →
+  Confidentialité → Localisation). Sans GPS, un ordinateur se situe par le
+  Wi-Fi, à quelques dizaines de mètres près.
 - **Coordonnées GPS** : la recherche accepte aussi des coordonnées
   (`5.33641, -4.02672`) pour placer un point au mètre près. Survoler la
   pastille d'un point affiche les siennes.

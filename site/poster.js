@@ -53,7 +53,7 @@ window.HaresPoster = (() => {
   }
 
   async function tileBackground(f, layer) {
-    const z = Math.max(1, Math.min(18, layer.maxZoom || 18, Math.floor(Math.log2(f.fit / 256))));
+    const z = Math.max(1, Math.min(18, layer.maxNative || 18, Math.floor(Math.log2(f.fit / 256))));
     const n = 2 ** z, world = 256 * n, s = f.fit / world; // échelle tuile → image (≈ 1 à 2)
     const left = f.cx * world - MAP.w / 2 / s, top = f.cy * world - MAP.h / 2 / s;
     const tx0 = Math.floor(left / 256), tx1 = Math.floor((left + MAP.w / s) / 256);
@@ -66,20 +66,26 @@ window.HaresPoster = (() => {
     o.fillStyle = '#1d1d1d';
     o.fillRect(0, 0, MAP.w, MAP.h);
 
+    // fond puis, s'il y en a, la couche des noms par-dessus (dans l'ordre)
     const jobs = [];
-    for (let x = tx0; x <= tx1; x++) {
-      for (let y = ty0; y <= ty1; y++) {
-        const url = layer.url
-          .replace('{s}', subs[Math.abs(x + y) % subs.length])
-          .replace('{z}', z).replace('{x}', ((x % n) + n) % n).replace('{y}', y)
-          .replace('{r}', '@2x');
-        jobs.push(loadImage(url).then(img => {
-          if (img) o.drawImage(img, (x * 256 - left) * s, (y * 256 - top) * s, 256 * s + 1, 256 * s + 1);
-          return !!img;
-        }));
+    for (const tpl of [layer.url, layer.overlay].filter(Boolean)) {
+      const imgs = [];
+      for (let x = tx0; x <= tx1; x++) {
+        for (let y = ty0; y <= ty1; y++) {
+          const url = tpl
+            .replace('{s}', subs[Math.abs(x + y) % subs.length])
+            .replace('{z}', z).replace('{x}', ((x % n) + n) % n).replace('{y}', y)
+            .replace('{r}', '@2x');
+          imgs.push(loadImage(url).then(img => ({ img, x, y })));
+        }
       }
+      const loaded = await Promise.all(imgs);
+      loaded.forEach(({ img, x, y }) => {
+        if (img) o.drawImage(img, (x * 256 - left) * s, (y * 256 - top) * s, 256 * s + 1, 256 * s + 1);
+        if (tpl === layer.url) jobs.push(!!img);
+      });
     }
-    const ok = (await Promise.all(jobs)).filter(Boolean).length;
+    const ok = jobs.filter(Boolean).length;
     if (ok < jobs.length * 0.6) return null;
 
     try {
@@ -90,7 +96,7 @@ window.HaresPoster = (() => {
           // luminosité inversée, teintes conservées (fond OpenStreetMap clair → sombre)
           const shift = 255 - 2 * (0.299 * r + 0.587 * g + 0.114 * b);
           r = (r + shift) * 0.88; g = (g + shift) * 0.88; b = (b + shift) * 0.88;
-        } else if (/arcgis/.test(layer.url)) {
+        } else if (/World_Imagery/.test(layer.url)) {
           r *= 0.75; g *= 0.75; b *= 0.75; // satellite assombri pour que le tracé ressorte
         }
         d[i] = r; d[i + 1] = g; d[i + 2] = b;

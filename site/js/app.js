@@ -235,7 +235,7 @@
     prefetchTimer = setTimeout(() => {
       const c = MV.map && MV.map.getCenter();
       const start = state.points[0] || myPos || (c && { lat: c.lat, lng: c.lng });
-      HR.generator.prefetch(start, state.randKm * 1000);
+      HR.gen.prefetch(start, state.randKm * 1000);
     }, 400);
   }
 
@@ -404,7 +404,7 @@
       MV.fit([HR.offset(start, r, 0), HR.offset(start, r, 90), HR.offset(start, r, 180), HR.offset(start, r, 270)], padding());
       MV.setRoute(null);
       let anim = null;
-      const res = await HR.generator.generate(start, km * 1000, {
+      const res = await HR.gen.generate(start, km * 1000, {
         signal: ctrl.signal,
         onStage: s => { stage = s; show(); if (s === 'fallback') toast('Le service des rues ne répond pas : boucle calculée sans l’animation.', 5000); },
         // animation en 2,5 s : la vague d'exploration (1,8 s, pendant que les
@@ -776,13 +776,108 @@
     });
   }
 
+  // ---------- accès : compte ou clé d'accès ----------
+  // L'appli ne s'ouvre qu'à un utilisateur connecté, ou à qui a saisi la clé
+  // d'accès. La clé n'est pas écrite en clair : on compare son empreinte
+  // SHA-256. C'est un verrou d'interface (le code du site reste public), pas
+  // une protection des données — celle-ci vient des règles Supabase.
+  const KEY_HASH = '87a8f9d27759d2c3b7fc72d30b7207bd035a0d69a1ff84c1e2de227551f37500';
+  const hasKeyAccess = () => LS.get('access') === KEY_HASH;
+  let grantAccess;
+  const accessGranted = new Promise(r => { grantAccess = r; });
+  let gateMode = 'in';
+
+  async function sha256(text) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  function openGate() {
+    $('#gate-auth').hidden = !HR.store.enabled;
+    $('#gate-sep').hidden = !HR.store.enabled;
+    $('#gate').hidden = false;
+    document.body.classList.add('is-locked');
+    document.body.classList.remove('is-booting');
+    $$('dialog[open]').forEach(d => d.close());
+  }
+  function closeGate() {
+    $('#gate').hidden = true;
+    document.body.classList.remove('is-locked', 'is-booting');
+    grantAccess();
+  }
+  function gateMsg(text, kind = 'error') {
+    const m = $('#gate-msg');
+    m.hidden = !text; m.textContent = text; m.className = 'small is-' + kind;
+  }
+  function setGateMode(m) {
+    gateMode = m;
+    $$('[data-gate]').forEach(b => b.classList.toggle('is-on', b.dataset.gate === m));
+    $('#gate-submit').textContent = m === 'in' ? 'Se connecter' : 'Créer mon compte';
+    $('#gate-pass').autocomplete = m === 'in' ? 'current-password' : 'new-password';
+    $('[data-action="gate-forgot"]').hidden = m !== 'in';
+    gateMsg('');
+  }
+  function bindGate() {
+    $$('[data-gate]').forEach(b => (b.onclick = () => setGateMode(b.dataset.gate)));
+    $('#gate-auth').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = $('#gate-email').value.trim(), pass = $('#gate-pass').value;
+      $('#gate-submit').disabled = true;
+      try {
+        if (gateMode === 'in') await HR.store.auth.signIn(email, pass); // la suite : événement SIGNED_IN
+        else {
+          const data = await HR.store.auth.signUp(email, pass);
+          if (!data.session) { setGateMode('in'); gateMsg('Compte créé. Ouvre le lien reçu par e-mail pour le confirmer, puis connecte-toi.', 'ok'); }
+        }
+      } catch (err) { gateMsg(err.message); }
+      finally { $('#gate-submit').disabled = false; }
+    });
+    $('[data-action="gate-forgot"]').onclick = async e => {
+      e.preventDefault();
+      const email = $('#gate-email').value.trim();
+      if (!email) return gateMsg('Écris ton e-mail ci-dessus, puis touche « Mot de passe oublié ? ».');
+      try { await HR.store.auth.resetPassword(email); gateMsg('Un lien pour changer ton mot de passe vient de t’être envoyé.', 'ok'); }
+      catch (err) { gateMsg(err.message); }
+    };
+    $('#gate-key').addEventListener('submit', async e => {
+      e.preventDefault();
+      const msg = $('#gate-key-msg');
+      if (!window.crypto || !crypto.subtle) { msg.hidden = false; msg.textContent = 'Ouvre le site en https:// pour utiliser la clé.'; return; }
+      if (await sha256($('#gate-key-input').value.trim()) === KEY_HASH) {
+        LS.set('access', KEY_HASH);
+        msg.hidden = true;
+        closeGate();
+      } else {
+        msg.hidden = false; msg.textContent = 'Clé incorrecte.';
+        $('#gate-key-input').select();
+      }
+    });
+  }
+
   // ---------- démarrage ----------
   async function start() {
     bind();
+    bindGate();
     setMode(state.mode);
     setAuthMode('in');
     $('#style-btn').textContent = MV.STYLES[state.style].name;
     renderPoints(); renderRandomFrom(); renderStats();
+
+    // compte : session éventuelle, puis décision d'accès
+    const storeReady = HR.store.init().catch(e => console.warn('Comptes :', e.message)).then(() => {
+      renderAccountBtn();
+      if (hasKeyAccess() || HR.store.user) closeGate(); else openGate();
+    });
+    HR.store.onAuth((event, u) => {
+      renderAccountBtn();
+      if (event === 'PASSWORD_RECOVERY') { closeGate(); openAccount('newpass'); }
+      else if (event === 'SIGNED_IN') {
+        if (!$('#gate').hidden) { closeGate(); toast(`Bienvenue, ${u.email}`); }
+        else if ($('#account-dialog').open && $('#newpass-form').hidden) { $('#account-dialog').close(); toast(`Connecté : ${u.email}`); }
+      } else if (event === 'SIGNED_OUT') {
+        toast('Déconnecté.');
+        if (!hasKeyAccess()) openGate();
+      }
+    });
 
     const shared = readSharedLink();
     if (shared && state.points.length) LS.set('backup', state);
@@ -800,28 +895,20 @@
       $('#osm-edit').href = `https://www.openstreetmap.org/edit#map=${Math.max(16, Math.round(MV.map.getZoom()))}/${c.lat.toFixed(5)}/${c.lng.toFixed(5)}`;
     });
     renderPins();
+    if (shared) await loadRoute(shared);
+    else scheduleRoute(state.points.length > 1);
+
+    // le reste attend l'accès : pas de demande de localisation derrière l'écran d'entrée
+    await storeReady;
+    await accessGranted;
     if (shared) {
-      await loadRoute(shared);
       $('#shared-title').textContent = shared.name || 'Trajet partagé';
       $('#shared-meta').textContent = `${fmt.km(shared.distance)} km${shared.loop ? ' · boucle' : ''}`;
       $('#shared-dialog').showModal();
-    } else {
-      scheduleRoute(state.points.length > 1);
     }
     startWatch();
     if (!state.points.length && !shared) locate({ quiet: true }).then(prefetchStreets);
     else prefetchStreets();
-
-    await HR.store.init();
-    renderAccountBtn();
-    HR.store.onAuth((event, u) => {
-      renderAccountBtn();
-      if (event === 'PASSWORD_RECOVERY') openAccount('newpass');
-      else if (event === 'SIGNED_IN' && $('#account-dialog').open && $('#newpass-form').hidden) {
-        $('#account-dialog').close();
-        toast(`Connecté : ${u.email}`);
-      } else if (event === 'SIGNED_OUT') toast('Déconnecté.');
-    });
   }
 
   start();

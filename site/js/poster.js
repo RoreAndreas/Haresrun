@@ -9,7 +9,7 @@
   const W = 1080, H = 1350;
   const MAP = { x: 40, y: 230, w: 1000, h: 680 };
   const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
-  const C = { bg: '#121212', panel: '#1a1a1a', line: '#2e2e2e', text: '#e8e8e8', muted: '#8c8c8c', accent: '#ff7a1a' };
+  const C = { bg: '#0a0d12', panel: '#121821', line: '#232c37', text: '#eef4fa', muted: '#8b97a6', accent: '#1ec8ff' };
   const { fmt } = HR;
 
   // projection Mercator pour la version sans fond de carte

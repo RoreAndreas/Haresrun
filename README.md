@@ -25,6 +25,8 @@ haresrun/
 │   │   ├── app.js         interface et logique de l'appli
 │   │   ├── mapview.js     carte MapLibre, styles, tracé, animations
 │   │   ├── generator.js   boucles aléatoires (Dijkstra, A*)
+│   │   ├── worker.js      calculs de boucle en arrière-plan (Web Worker)
+│   │   ├── genclient.js   lien entre l'interface et le worker
 │   │   ├── streets.js     réseau des rues : tuiles de la carte, Overpass, cache
 │   │   ├── follow.js      suivi GPS d'un trajet
 │   │   ├── store.js       comptes et bibliothèque (Supabase ou appareil)
@@ -35,6 +37,19 @@ haresrun/
 ├── supabase/schema.sql    table des trajets et règles d'accès
 └── serve.py               aperçu local
 ```
+
+## Accès
+
+L'appli s'ouvre sur un écran d'entrée : il faut **se connecter** (ou créer
+un compte), ou saisir la **clé d'accès**. La clé est vérifiée par son
+empreinte SHA-256 (elle n'apparaît pas en clair dans le code) et reste
+mémorisée sur l'appareil. C'est un verrou d'interface : le code d'un site
+web étant public, il décourage l'accès sans être une protection forte. Les
+trajets enregistrés, eux, sont protégés par les règles Supabase.
+
+Pour changer la clé : calculer l'empreinte de la nouvelle
+(`node -e "console.log(require('crypto').createHash('sha256').update('NOUVELLE_CLE').digest('hex'))"`)
+et la mettre dans `KEY_HASH` (`site/js/app.js`).
 
 ## Lancer
 

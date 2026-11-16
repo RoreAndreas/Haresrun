@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0d0d0d">
+  <meta name="theme-color" content="#0a0d12">
   <title>HARES RUN</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="is-booting">
   <div id="map" aria-label="Carte"></div>
   <div id="map-error" class="map-error" hidden>
     <p>La carte n'a pas pu s'afficher sur cet appareil.</p>
@@ -18,7 +18,7 @@
 
   <!-- barre du haut -->
   <header class="top">
-    <span class="logo">HARES RUN</span>
+    <span class="logo glass"><i class="logo__dot"></i>HARES RUN</span>
     <div class="top__actions">
       <button class="icon-btn" data-action="open-library" aria-label="Mes trajets" title="Mes trajets">
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -219,6 +219,31 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- accès : compte ou clé d'accès -->
+  <section id="gate" class="gate" hidden>
+    <div class="gate__card glass">
+      <div class="gate__logo"><i class="logo__dot"></i>HARES RUN</div>
+      <p class="gate__tag">Trace, génère et suis tes runs.</p>
+      <form id="gate-auth" class="form" hidden>
+        <div class="seg seg--small">
+          <button type="button" class="seg__btn is-on" data-gate="in">Se connecter</button>
+          <button type="button" class="seg__btn" data-gate="up">Créer un compte</button>
+        </div>
+        <input id="gate-email" class="input" type="email" autocomplete="email" placeholder="E-mail" required>
+        <input id="gate-pass" class="input" type="password" autocomplete="current-password" placeholder="Mot de passe (8 caractères min.)" minlength="8" required>
+        <p id="gate-msg" class="small" hidden></p>
+        <button class="btn btn--accent btn--block" type="submit" id="gate-submit">Se connecter</button>
+        <button class="link" type="button" data-action="gate-forgot">Mot de passe oublié ?</button>
+      </form>
+      <div class="gate__sep" id="gate-sep" hidden><span>ou</span></div>
+      <form id="gate-key" class="gate__key" autocomplete="off">
+        <input id="gate-key-input" class="input" type="password" inputmode="numeric" placeholder="Clé d'accès" aria-label="Clé d'accès">
+        <button class="btn" type="submit">Entrer</button>
+      </form>
+      <p id="gate-key-msg" class="small gate__err" hidden></p>
+    </div>
+  </section>
+
   <script src="vendor/maplibre/maplibre-gl.js"></script>
   <script src="vendor/supabase/supabase.js"></script>
   <script src="config.js"></script>
@@ -227,6 +252,7 @@
   <script src="js/mapview.js"></script>
   <script src="js/streets.js"></script>
   <script src="js/generator.js"></script>
+  <script src="js/genclient.js"></script>
   <script src="js/follow.js"></script>
   <script src="js/store.js"></script>
   <script src="js/poster.js"></script>

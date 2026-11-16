@@ -317,20 +317,22 @@
     const limit = need * 1.4;
     const d = explore(g, src, limit);
 
-    // animation : chaque rue explorée, repérée par sa distance au départ
+    // Animation : les rues explorées, rangées par distance au départ, sous
+    // forme compacte (tableaux de nombres, transférables depuis un worker) :
+    // segs = [lng1, lat1, lng2, lat2, …], o = ordre de découverte (0 → 1).
     if (onExplore) {
       let far = 0;
       for (const v of d) if (v <= limit && v > far) far = v;
-      const features = [];
-      for (const [a, b] of g.edges) {
-        const da = d[a], db = d[b];
-        if (!(da <= limit) || !(db <= limit)) continue;
-        features.push({
-          type: 'Feature', properties: { o: Math.max(da, db) / (far || 1) },
-          geometry: { type: 'LineString', coordinates: [[g.lng[a], g.lat[a]], [g.lng[b], g.lat[b]]] },
-        });
-      }
-      onExplore({ type: 'FeatureCollection', features });
+      const list = [];
+      g.edges.forEach(([a, b], e) => { if (d[a] <= limit && d[b] <= limit) list.push([Math.max(d[a], d[b]), e]); });
+      list.sort((p, q) => p[0] - q[0]);
+      const segs = new Float64Array(list.length * 4), o = new Float32Array(list.length);
+      list.forEach(([dd, e], i) => {
+        const [a, b] = g.edges[e];
+        segs[4 * i] = g.lng[a]; segs[4 * i + 1] = g.lat[a]; segs[4 * i + 2] = g.lng[b]; segs[4 * i + 3] = g.lat[b];
+        o[i] = dd / (far || 1);
+      });
+      onExplore({ segs, o });
     }
     await breathe();
     check();

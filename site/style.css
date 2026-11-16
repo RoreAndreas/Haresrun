@@ -117,6 +117,7 @@ a { color: var(--accent); }
   box-shadow: 0 0 10px var(--accent);
 }
 .top__actions { display: flex; gap: 8px; }
+.logo__hares { margin: -6px 0 -6px -4px; }
 .account-initial { font-weight: 800; font-size: 16px; color: var(--accent); }
 
 .tools {
@@ -150,11 +151,18 @@ a { color: var(--accent); }
 }
 .sheet__handle { border: 0; background: none; padding: 9px 0 5px; cursor: pointer; width: 100%; }
 .sheet__handle span { display: block; width: 42px; height: 5px; margin: 0 auto; border-radius: 3px; background: rgba(255, 255, 255, .28); }
-.sheet__summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 8px; }
-.sum b { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.sheet__summary { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.sum { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sum b { font-size: 28px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .sum small { margin-left: 4px; color: var(--muted); }
-.sum .muted { margin-left: 10px; font-size: 13px; }
-.sheet__summary .btn--accent { padding: 11px 24px; border-radius: 16px; }
+.sum .muted { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sum .muted:empty { display: none; }
+.sheet__summary .btn { flex: none; }
+.sheet__summary .btn--accent { padding: 11px 20px; border-radius: 16px; }
+/* bouton Réglages / Fermer : ouvre ou replie le détail des paramètres */
+.details-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 12px; font-weight: 600; }
+.details-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.sheet:not(.is-collapsed) .details-btn svg { transform: rotate(180deg); }
 .sheet__body { overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px 0 2px; scrollbar-width: none; }
 .sheet.is-collapsed .sheet__body { display: none; }
 
@@ -209,11 +217,24 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   border-radius: 18px; white-space: nowrap;
 }
 .gen-bar span { font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
-.gen-bar span::before {
-  content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; vertical-align: 1px;
-  background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: pulse 1s ease-in-out infinite;
-}
-@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }
+.gen-bar { padding-left: 8px; }
+
+/* ---------- Hares, le spartiate de l'open space (pixel art 20 × 24) ----------
+   Images tirées du moteur de l'open space (src/engine/robots.ts) : course
+   vers la droite (4 images), debout de face, bras levés (2 images). Agrandies
+   sans lissage pour garder les pixels nets. */
+.hares { display: inline-block; flex: none; image-rendering: pixelated; background-repeat: no-repeat; }
+.hares--stand { background-image: url(img/hares-stand.png); background-size: 100% 100%; width: 20px; height: 24px; }
+.hares--stand.hares--x4 { width: 80px; height: 96px; }
+.hares--run { background-image: url(img/hares-run.png); }
+.hares--run.hares--x2 { width: 40px; height: 48px; background-size: 160px 48px; animation: hares-run-2 .48s steps(4) infinite; margin: -6px 0; }
+.hares--run.hares--x5 { width: 100px; height: 120px; background-size: 400px 120px; animation: hares-run-5 .48s steps(4) infinite; }
+.hares--cheer { background-image: url(img/hares-cheer.png); width: 60px; height: 72px; background-size: 120px 72px; animation: hares-cheer .5s steps(2) infinite; }
+@keyframes hares-run-2 { to { background-position: -160px 0; } }
+@keyframes hares-run-5 { to { background-position: -400px 0; } }
+@keyframes hares-cheer { to { background-position: -120px 0; } }
+.follow__hares { display: block; margin: 10px auto 0; filter: drop-shadow(0 6px 14px rgba(0, 0, 0, .6)); }
+.follow__hares[hidden] { display: none; }
 .gen-bar .btn { min-height: 36px; padding: 6px 14px; border-radius: 12px; }
 
 /* ---------- suivi GPS ---------- */
@@ -264,7 +285,8 @@ body.is-following .maplibregl-ctrl-bottom-right { bottom: 76px; }
 .library .lib-main b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .library .lib-acts { display: flex; gap: 4px; }
 .library .lib-acts .btn { min-height: 34px; padding: 6px 10px; font-size: 13px; border-radius: 11px; }
-.library .empty { color: var(--muted); justify-content: center; background: none; border: 0; }
+.library .empty { color: var(--muted); flex-direction: column; text-align: center; background: none; border: 0; }
+.library .empty .hares { margin: 6px auto 10px; }
 
 .export { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 .export canvas { width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--line); }
@@ -285,7 +307,8 @@ body.is-following .maplibregl-ctrl-bottom-right { bottom: 76px; }
     rgba(5, 8, 12, .55);
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-.gate__card { width: min(400px, 100%); padding: 26px 22px 22px; border-radius: 30px; display: flex; flex-direction: column; gap: 14px; }
+.gate__card { width: min(400px, 100%); padding: 22px 22px 22px; border-radius: 30px; display: flex; flex-direction: column; gap: 14px; }
+.gate__hares { align-self: center; margin: -4px 0 -8px; filter: drop-shadow(0 10px 16px rgba(0, 0, 0, .55)); }
 .gate__logo { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 22px; font-weight: 900; letter-spacing: .16em; }
 .gate__logo .logo__dot { width: 14px; height: 14px; }
 .gate__tag { margin: -6px 0 4px; text-align: center; color: var(--muted); }
@@ -311,6 +334,30 @@ body.is-locked .top, body.is-locked .tools, body.is-locked .sheet { visibility: 
 }
 @media (max-width: 899px) {
   .export { grid-template-columns: 1fr; }
+
+  /* téléphone : panneaux opaques, sans effet verre — plus lisibles en plein
+     soleil et plus fluides sur une carte qui bouge */
+  .glass, .icon-btn, .chip, .sheet, .gen-bar, .follow__stats, .follow__status, .dialog, .toast, .logo {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    background: #121821; border-color: rgba(255, 255, 255, .09);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 6px 20px rgba(0, 0, 0, .45);
+  }
+  .gate { -webkit-backdrop-filter: none; backdrop-filter: none; background: radial-gradient(70% 45% at 30% 10%, rgba(30, 200, 255, .18), transparent 70%), #0a0d12; }
+  .dialog::backdrop { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgba(4, 7, 11, .7); }
+
+  /* boutons de carte en haut à droite : ils ne suivent plus le panneau,
+     donc ne chevauchent plus les boutons du haut */
+  .tools { top: calc(66px + env(safe-area-inset-top)); bottom: auto; }
+
+  /* panneau collé en bas ; ouvert, il occupe l'écran sous la barre du haut */
+  .sheet { left: 0; right: 0; bottom: 0; max-height: none; border-radius: 22px 22px 0 0; border-bottom: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .sheet:not(.is-collapsed) { top: calc(64px + env(safe-area-inset-top)); }
+  .sheet__body { flex: 1; min-height: 0; }
+  .points { max-height: none; }
+
+  /* génération et messages : juste au-dessus du panneau */
+  .gen-bar { top: auto; bottom: calc(var(--sheet-h, 120px) + 14px); }
+  .toast { top: auto; bottom: min(calc(var(--sheet-h, 120px) + 72px), calc(100vh - 150px)); }
 }
 /* pas de flou d'arrière-plan : verre plus opaque, toujours lisible */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

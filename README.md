@@ -38,6 +38,17 @@ haresrun/
 └── serve.py               aperçu local
 ```
 
+## Hares
+
+La mascotte est **Hares**, le spartiate de l'open space (dépôt
+`RoreAndreas/Openspace43`) : casque de bronze à aigrette rouge, cape,
+bouclier au lambda et lance. Ses images (`site/img/hares-*.png`) sont
+tirées telles quelles du moteur pixel art de l'open space
+(`src/engine/robots.ts`, gabarit 20 × 24) : course (4 images), debout,
+bras levés (2 images). On le voit sur l'écran d'entrée, dans le logo,
+pendant la génération d'une boucle, dans la bibliothèque vide et à
+l'arrivée d'un suivi GPS.
+
 ## Accès
 
 L'appli s'ouvre sur un écran d'entrée : il faut **se connecter** (ou créer

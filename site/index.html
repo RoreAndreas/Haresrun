@@ -18,7 +18,7 @@
 
   <!-- barre du haut -->
   <header class="top">
-    <span class="logo glass"><i class="logo__dot"></i>HARES RUN</span>
+    <span class="logo glass"><i class="hares hares--stand logo__hares" aria-hidden="true"></i>HARES RUN</span>
     <div class="top__actions">
       <button class="icon-btn" data-action="open-library" aria-label="Mes trajets" title="Mes trajets">
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -39,6 +39,7 @@
 
   <!-- génération en cours : étape, temps écoulé, annulation -->
   <div id="gen-bar" class="gen-bar" hidden>
+    <i class="hares hares--run hares--x2" aria-hidden="true"></i>
     <span id="gen-status"></span>
     <button class="btn" data-action="generate">Annuler</button>
   </div>
@@ -49,9 +50,12 @@
 
     <div class="sheet__summary">
       <div class="sum">
-        <b id="sum-dist">0,00</b><small>km</small>
+        <div><b id="sum-dist">0,00</b><small>km</small></div>
         <span id="sum-meta" class="muted"></span>
       </div>
+      <button class="btn details-btn" data-action="toggle-sheet" id="details-btn" aria-expanded="true">
+        <span>Réglages</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+      </button>
       <button class="btn btn--accent" data-action="start-follow" id="follow-btn" disabled>Suivre</button>
     </div>
 
@@ -125,6 +129,7 @@
       <div><span>Allure</span><b id="f-pace">—</b><small>/km</small></div>
     </div>
     <p id="f-status" class="follow__status">En attente du GPS…</p>
+    <i id="f-hares" class="hares hares--cheer follow__hares" role="img" aria-label="Hares fête ton arrivée" hidden></i>
     <div class="follow__bar">
       <button class="btn" data-action="recenter">Recentrer</button>
       <button class="btn btn--danger" data-action="stop-follow">Arrêter</button>
@@ -222,7 +227,8 @@
   <!-- accès : compte ou clé d'accès -->
   <section id="gate" class="gate" hidden>
     <div class="gate__card glass">
-      <div class="gate__logo"><i class="logo__dot"></i>HARES RUN</div>
+      <i class="hares hares--run hares--x5 gate__hares" role="img" aria-label="Hares, le spartiate de l’open space"></i>
+      <div class="gate__logo">HARES RUN</div>
       <p class="gate__tag">Trace, génère et suis tes runs.</p>
       <form id="gate-auth" class="form" hidden>
         <div class="seg seg--small">

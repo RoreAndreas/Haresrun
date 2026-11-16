@@ -444,6 +444,7 @@
     autoCenter = true;
     followCum = cumulative(route.path);
     setStatus('En attente du GPS…', '');
+    $('#f-hares').hidden = true;
     $('#f-rem').textContent = fmt.km(route.distance);
     $('#f-done').textContent = '0,00'; $('#f-time').textContent = '0:00'; $('#f-pace').textContent = '—';
     if (route.path[0]) MV.map.easeTo({ center: [route.path[0].lng, route.path[0].lat], zoom: 16 });
@@ -459,7 +460,7 @@
         else if (s.remaining > 30) setStatus(s.progress < 20 ? 'Sur le parcours — c’est parti !' : 'Sur le parcours', 'is-ok');
         if (autoCenter) MV.map.easeTo({ center: [s.pos.lng, s.pos.lat], duration: 600 });
       },
-      onFinish: s => setStatus(`Arrivée ! ${fmt.km(s.progress)} km en ${fmt.dur(s.elapsed)}`, 'is-done'),
+      onFinish: s => { setStatus(`Arrivée ! ${fmt.km(s.progress)} km en ${fmt.dur(s.elapsed)}`, 'is-done'); $('#f-hares').hidden = false; },
       onError: err => setStatus(geoError(err), 'is-off'),
     });
   }
@@ -571,7 +572,7 @@
     if (!dlg.open) dlg.showModal();
     let list;
     try { list = await HR.store.list(); } catch (e) { ul.innerHTML = `<li class="empty">${esc(e.message)}</li>`; return; }
-    if (!list.length) { ul.innerHTML = '<li class="empty">Aucun trajet enregistré pour l’instant.</li>'; return; }
+    if (!list.length) { ul.innerHTML = '<li class="empty"><i class="hares hares--stand hares--x4" aria-hidden="true"></i>Aucun trajet enregistré pour l’instant.<br>Trace ou génère un trajet, puis « Enregistrer ».</li>'; return; }
     ul.innerHTML = '';
     list.forEach(r => {
       const li = document.createElement('li');
@@ -680,8 +681,13 @@
   }
 
   // ---------- panneau repliable ----------
+  // Replié : seulement le résumé (distance, Réglages, Suivre), la carte est
+  // libre. Ouvert : tous les réglages, en plein écran sur téléphone.
   function collapseSheet(on) {
     $('#sheet').classList.toggle('is-collapsed', on);
+    const btn = $('#details-btn');
+    btn.setAttribute('aria-expanded', String(!on));
+    btn.querySelector('span').textContent = on ? 'Réglages' : 'Fermer';
   }
   new ResizeObserver(() => {
     document.documentElement.style.setProperty('--sheet-h', $('#sheet').offsetHeight + 'px');
@@ -857,6 +863,7 @@
   async function start() {
     bind();
     bindGate();
+    collapseSheet(window.innerWidth < 900); // téléphone : la carte d'abord, les réglages sur demande
     setMode(state.mode);
     setAuthMode('in');
     $('#style-btn').textContent = MV.STYLES[state.style].name;

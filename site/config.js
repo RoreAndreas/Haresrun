@@ -15,6 +15,6 @@
 window.HARES_CONFIG = {
   defaultCenter: { lat: 5.3364, lng: -4.0267 }, // Abidjan
   defaultZoom: 14,
-  supabaseUrl: '',      // ex. 'https://abcdefgh.supabase.co'
-  supabaseAnonKey: '',  // ex. 'eyJhbGciOi…'
+  supabaseUrl: 'https://dkjsemjvebfrqtklrwge.supabase.co',
+  supabaseAnonKey: 'sb_publishable_Pay2IVV_I3-zmSPcSCdhMw_ZlrLKO5k', // clé publique (publishable)
 };

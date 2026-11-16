@@ -160,7 +160,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 
 /* ---------- génération en cours ---------- */
 .gen-bar {
-  position: fixed; z-index: 25; left: 50%; transform: translateX(-50%); bottom: calc(var(--sheet-h, 120px) + 12px);
+  position: fixed; z-index: 25; left: 50%; transform: translateX(-50%); top: calc(64px + env(safe-area-inset-top));
   display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 14px; max-width: calc(100vw - 24px);
   background: rgba(22, 22, 22, .95); border: 1px solid var(--line); border-radius: 12px; white-space: nowrap;
 }

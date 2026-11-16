@@ -92,7 +92,7 @@
   // L'animation d'exploration avance par paliers : changer le filtre d'une
   // couche oblige MapLibre à recalculer ses tuiles, ce qui est trop lourd à
   // chaque image avec des dizaines de milliers de rues.
-  const STEPS = 30;
+  const STEPS = 40;
   let map = null, styleId = 'epure', straight = false, exploreStep = STEPS;
   let pinMarkers = [], meMarker = null;
 
@@ -122,6 +122,15 @@
         'line-color': ['interpolate', ['linear'], ['get', 'o'], 0, '#7fd3ff', 1, '#1f5f99'],
         'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2.5], 'line-opacity': 0.85,
         'line-opacity-transition': { duration: 600 },
+      },
+    });
+    // front de la vague : les dernières rues découvertes, plus claires et plus larges
+    add({
+      id: 'explore-front', type: 'line', source: 'explore', layout: { 'line-cap': 'round' },
+      filter: ['==', ['get', 'b'], -99],
+      paint: {
+        'line-color': '#e3f6ff', 'line-blur': 1.5, 'line-opacity': 0.95,
+        'line-width': ['interpolate', ['linear'], ['zoom'], 12, 2, 16, 4.5],
       },
     });
     add({ id: 'route-casing', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#0d0d0d', 'line-width': 9, 'line-opacity': 0.7 } });
@@ -177,12 +186,15 @@
     setData('done', path && path.length > 1 ? { type: 'FeatureCollection', features: [line(path)] } : empty());
   }
 
+  const easeInOut = t => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2);
+  const easeOut = t => 1 - (1 - t) ** 3;
+
   /** Dessine le tracé progressivement, du départ à l'arrivée. */
-  function animateRoute(path, duration = 900) {
+  function animateRoute(path, duration = 700) {
     return new Promise(resolve => {
       const cum = HR.cumulative(path), total = cum[cum.length - 1], t0 = performance.now();
       const step = now => {
-        const f = Math.min(1, (now - t0) / duration), lim = total * (1 - (1 - f) ** 2);
+        const f = Math.min(1, (now - t0) / duration), lim = total * easeInOut(f);
         let i = cum.findIndex(c => c >= lim);
         if (i < 0) i = path.length;
         setRoute(path.slice(0, Math.max(2, i + 1)));
@@ -202,19 +214,28 @@
     }
     setData('explore', fc);
   }
-  function animateExplore(duration = 2600) {
+  /** La vague part vite du départ puis ralentit en s'éloignant. */
+  function animateExplore(duration = 1800) {
     return new Promise(resolve => {
       const t0 = performance.now();
       const tick = now => {
-        const f = Math.min(1, (now - t0) / duration), s = Math.min(STEPS, Math.ceil(f * STEPS));
+        const f = Math.min(1, (now - t0) / duration), s = Math.min(STEPS, Math.ceil(easeOut(f) * STEPS));
         if (s !== exploreStep) {
           exploreStep = s;
-          if (map.getLayer('explore')) map.setFilter('explore', ['<=', ['get', 'b'], s]);
+          if (map.getLayer('explore')) {
+            map.setFilter('explore', ['<=', ['get', 'b'], s]);
+            map.setFilter('explore-front', f < 1 ? ['all', ['<=', ['get', 'b'], s], ['>=', ['get', 'b'], s - 2]] : ['==', ['get', 'b'], -99]);
+          }
         }
-        if (f < 1) requestAnimationFrame(tick); else resolve();
+        if (f < 1) requestAnimationFrame(tick);
+        else { if (map.getLayer('explore-front')) map.setFilter('explore-front', ['==', ['get', 'b'], -99]); resolve(); }
       };
       requestAnimationFrame(tick);
     });
+  }
+  /** Rues explorées en retrait, le temps que la boucle se dessine par-dessus. */
+  function dimExplore() {
+    if (map.getLayer('explore')) map.setPaintProperty('explore', 'line-opacity', 0.25);
   }
   function fadeExplore() {
     if (map.getLayer('explore')) map.setPaintProperty('explore', 'line-opacity', 0);
@@ -293,7 +314,7 @@
   }
 
   HR.mapview = {
-    COLORS, STYLES, init, setStyle, setRoute, setDone, animateRoute, setExplore, animateExplore, fadeExplore,
+    COLORS, STYLES, init, setStyle, setRoute, setDone, animateRoute, setExplore, animateExplore, dimExplore, fadeExplore,
     setPins, setMe, fit, snapshot,
     get map() { return map; }, get styleId() { return styleId; },
   };

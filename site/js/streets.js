@@ -19,12 +19,19 @@
   const { dist } = HR;
   const R = 6371008.8, RAD = Math.PI / 180;
 
-  // coût relatif par classe de voie (null : exclue)
+  // Coût relatif d'un mètre selon le type de voie, pour un coureur : les
+  // chemins et rues piétonnes sont préférés, les petites rues sont neutres,
+  // les grands axes (trafic, traversées), les voies de service (parkings,
+  // accès privés) et les escaliers sont évités. Classes absentes : exclues.
   const CLASS_PENALTY = {
-    trunk: 1.6, primary: 1.3, secondary: 1.1, tertiary: 1, minor: 1, service: 1.4,
-    track: 1, path: 1, pedestrian: 1, busway: 1.2,
+    trunk: 3, primary: 1.8, secondary: 1.3, tertiary: 1.1, minor: 1, service: 2.2,
+    track: 1.2, path: 0.9, pedestrian: 0.9, busway: 1.5,
   };
-  const OSM_PENALTY = { trunk: 1.6, primary: 1.3, secondary: 1.1, service: 1.4, steps: 1.5 };
+  const OSM_PENALTY = {
+    trunk: 3, primary: 1.8, secondary: 1.3, tertiary: 1.1, service: 2.2, track: 1.2, steps: 3,
+    footway: 0.9, path: 0.9, pedestrian: 0.9, cycleway: 1,
+  };
+  const STEPS_PENALTY = 3;
   const abortError = () => Object.assign(new Error('Génération annulée.'), { name: 'AbortError' });
 
   // ---------- construction du graphe ----------
@@ -183,7 +190,7 @@
         for (let i = 0; i + 1 < tags.length; i += 2) props[keys[tags[i]]] = values[tags[i + 1]];
         let pen = CLASS_PENALTY[props.class];
         if (pen == null || /construction/.test(props.class || '')) continue;
-        if (props.subclass === 'steps') pen = 1.5;
+        if (props.subclass === 'steps') pen = STEPS_PENALTY;
         // géométrie : MoveTo / LineTo, deltas en zigzag
         let x = 0, y = 0, i = 0, line = null;
         const parts = [];

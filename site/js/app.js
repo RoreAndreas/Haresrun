@@ -141,7 +141,7 @@
     clearTimeout(routeTimer);
     routeTimer = setTimeout(() => computeRoute(fitAfter), 250);
   }
-  async function computeRoute(fitAfter) {
+  async function computeRoute(fitAfter, draw = true) {
     const s = stops(), token = ++routeToken;
     if (s.length < 2) { route = null; gain = null; MV.setRoute(null); renderStats(); return; }
     let r = null, failed = false;
@@ -157,21 +157,25 @@
       if (!r) r = HR.services.straight(s);
     }
     route = r; gain = null;
-    MV.setRoute(r.path, { straight: r.source === 'straight' });
+    if (draw) MV.setRoute(r.path, { straight: r.source === 'straight' });
     renderStats();
     if (fitAfter) fitRoute();
     if (failed && !warnedStraight) {
       warnedStraight = true;
       toast('Service d’itinéraire indisponible pour le moment : tracé en ligne droite.', 6000);
     }
-    try {
-      const e = await HR.services.elevation(r.path, r.distance);
-      if (token === routeToken && e) { gain = e.gain; renderStats(); }
-    } catch (e) { console.warn('Altitude :', e.message); }
+    // dénivelé en arrière-plan : on n'attend pas la réponse pour continuer
+    HR.services.elevation(r.path, r.distance)
+      .then(e => { if (token === routeToken && e) { gain = e.gain; renderStats(); } })
+      .catch(e => console.warn('Altitude :', e.message));
   }
 
-  /** Remplace le trajet courant par un tracé connu (généré, chargé, partagé). */
-  function loadRoute({ points, loop, path, distance, source, name, id }) {
+  /**
+   * Remplace le trajet courant par un tracé connu (généré, chargé, partagé).
+   * `fit` : recadrer la carte ; `draw` : afficher le tracé tout de suite
+   * (non quand il va être dessiné en animation).
+   */
+  function loadRoute({ points, loop, path, distance, source, name, id }, { fit = true, draw = true } = {}) {
     snapshot();
     state.points = points.map(p => ({ id: uid(), lat: p.lat, lng: p.lng, label: p.label || '' }));
     state.loop = !!loop;
@@ -182,7 +186,7 @@
     state.points.forEach(p => { if (!p.label) nameIt(p); });
     save(); renderPins(); renderPoints(); renderRandomFrom();
     clearTimeout(routeTimer);
-    return computeRoute(true);
+    return computeRoute(fit, draw);
   }
 
   // ---------- panneau ----------
@@ -391,15 +395,19 @@
       const res = await HR.generator.generate(start, km * 1000, {
         signal: ctrl.signal,
         onStage: s => { stage = s; show(); if (s === 'fallback') toast('Le service des rues ne répond pas : boucle calculée sans l’animation.', 5000); },
-        onExplore: fc => { MV.setExplore(fc); anim = MV.animateExplore(Math.min(1400, 600 + fc.features.length / 60)); },
+        // animation en 2,5 s : la vague d'exploration (1,8 s, pendant que les
+        // boucles sont calculées), puis le tracé retenu qui se dessine (0,7 s)
+        onExplore: fc => { MV.setExplore(fc); anim = MV.animateExplore(1800); },
       });
       if (anim) await anim;
       if (ctrl.signal.aborted) throw Object.assign(new Error(), { name: 'AbortError' });
       clearInterval(timer);
       bar.hidden = true;
-      await loadRoute({ points: res.points, loop: true, path: res.path, distance: res.distance, source: 'generated', name: `Boucle de ${fmt.km1(res.distance)} km` });
-      await MV.animateRoute(res.path, 600);
+      MV.dimExplore();
+      await loadRoute({ points: res.points, loop: true, path: res.path, distance: res.distance, source: 'generated', name: `Boucle de ${fmt.km1(res.distance)} km` }, { fit: false, draw: false });
+      await MV.animateRoute(res.path, anim ? 700 : 1200);
       MV.fadeExplore();
+      fitRoute();
       toast(`Boucle de ${fmt.km(res.distance)} km. « Générer » à nouveau pour une autre.`, 4000);
     } catch (e) {
       MV.fadeExplore();

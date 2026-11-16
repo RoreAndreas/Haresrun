@@ -158,6 +158,15 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .actions .btn { flex: 1; }
 .osm-edit { display: block; text-align: center; color: var(--muted); }
 
+/* ---------- génération en cours ---------- */
+.gen-bar {
+  position: fixed; z-index: 25; left: 50%; transform: translateX(-50%); bottom: calc(var(--sheet-h, 120px) + 12px);
+  display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 14px; max-width: calc(100vw - 24px);
+  background: rgba(22, 22, 22, .95); border: 1px solid var(--line); border-radius: 12px; white-space: nowrap;
+}
+.gen-bar span { font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.gen-bar .btn { min-height: 36px; padding: 6px 12px; }
+
 /* ---------- suivi GPS ---------- */
 .follow {
   position: fixed; z-index: 30; left: 0; right: 0; top: 0; padding: calc(10px + env(safe-area-inset-top)) 12px 0; pointer-events: none;

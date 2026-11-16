@@ -335,41 +335,64 @@
   }
 
   // ---------- boucle aléatoire ----------
-  let generating = false;
+  // Génération : le bouton montre l'étape en cours et le temps écoulé ;
+  // le toucher pendant la génération l'annule.
+  let genCtrl = null;
+  const STAGES = {
+    position: 'Recherche de ta position',
+    download: 'Téléchargement des rues',
+    explore: 'Exploration des rues',
+    build: 'Construction de la boucle',
+    fallback: 'Calcul de la boucle (sans animation)',
+  };
   async function generateLoop() {
-    if (generating) return;
+    if (genCtrl) { genCtrl.abort(); return; }
     const km = Math.max(1, Math.min(42, parseFloat(String($('#rand-km').value).replace(',', '.')) || 5));
     state.randKm = km; save();
-    generating = true;
-    const btn = $('#gen-btn');
-    btn.disabled = true;
+    const ctrl = genCtrl = new AbortController();
+    const btn = $('#gen-btn'), bar = $('#gen-bar'), t0 = Date.now();
+    let stage = 'position';
+    const show = () => { $('#gen-status').textContent = `${STAGES[stage]}… ${Math.round((Date.now() - t0) / 1000)} s`; };
+    const timer = setInterval(show, 500);
+    btn.textContent = 'Annuler';
+    btn.classList.remove('btn--accent');
+    bar.hidden = false;
+    show();
+    if (window.innerWidth < 900) collapseSheet(true); // la carte entière pour voir l'exploration
     try {
       let start = state.points[0] || myPos;
-      if (!start) { btn.textContent = 'Recherche de ta position…'; start = await locate({ quiet: true }); }
+      if (!start) start = await locate({ quiet: true, center: false });
+      if (ctrl.signal.aborted) throw Object.assign(new Error(), { name: 'AbortError' });
       if (!start) { const c = MV.map.getCenter(); start = { lat: c.lat, lng: c.lng }; toast('Position inconnue : boucle depuis le centre de la carte.', 4000); }
-      btn.textContent = 'Exploration des rues…';
-      if (window.innerWidth < 900) collapseSheet(true);
       // cadrage sur la zone explorée
       const r = km * 1000 / (2 * Math.PI * 1.3) * 2.2;
       MV.fit([HR.offset(start, r, 0), HR.offset(start, r, 90), HR.offset(start, r, 180), HR.offset(start, r, 270)], padding());
       MV.setRoute(null);
       let anim = null;
       const res = await HR.generator.generate(start, km * 1000, {
+        signal: ctrl.signal,
+        onStage: s => { stage = s; show(); if (s === 'fallback') toast('Le service des rues ne répond pas : boucle calculée sans l’animation.', 5000); },
         onExplore: fc => { MV.setExplore(fc); anim = MV.animateExplore(Math.min(3500, 1500 + fc.features.length / 20)); },
       });
       if (anim) await anim;
+      if (ctrl.signal.aborted) throw Object.assign(new Error(), { name: 'AbortError' });
+      clearInterval(timer);
+      bar.hidden = true;
       await loadRoute({ points: res.points, loop: true, path: res.path, distance: res.distance, source: 'generated', name: `Boucle de ${fmt.km1(res.distance)} km` });
       await MV.animateRoute(res.path, 1000);
       MV.fadeExplore();
       toast(`Boucle de ${fmt.km(res.distance)} km. « Générer » à nouveau pour une autre.`, 4000);
     } catch (e) {
-      console.warn(e);
       MV.fadeExplore();
-      toast(e.message || 'Impossible de générer une boucle ici.', 6000);
+      scheduleRoute(); // remet le trajet d'avant à l'écran
+      if (e.name === 'AbortError') toast('Génération annulée.');
+      else { console.warn(e); toast(e.message || 'Impossible de générer une boucle ici.', 6000); }
     } finally {
-      generating = false;
-      btn.disabled = false;
+      clearInterval(timer);
+      bar.hidden = true;
+      genCtrl = null;
       btn.textContent = 'Générer une boucle';
+      btn.classList.add('btn--accent');
     }
   }
 

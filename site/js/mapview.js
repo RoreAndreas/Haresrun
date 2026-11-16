@@ -89,7 +89,11 @@
   // ---------- état des surcouches (survit aux changements de fond) ----------
   const empty = () => ({ type: 'FeatureCollection', features: [] });
   const data = { route: empty(), done: empty(), explore: empty(), acc: empty() };
-  let map = null, styleId = 'epure', straight = false, exploreProgress = 1;
+  // L'animation d'exploration avance par paliers : changer le filtre d'une
+  // couche oblige MapLibre à recalculer ses tuiles, ce qui est trop lourd à
+  // chaque image avec des dizaines de milliers de rues.
+  const STEPS = 30;
+  let map = null, styleId = 'epure', straight = false, exploreStep = STEPS;
   let pinMarkers = [], meMarker = null;
 
   const line = path => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: path.map(p => [p.lng, p.lat]) } });
@@ -113,7 +117,7 @@
     add({ id: 'acc-line', type: 'line', source: 'acc', paint: { 'line-color': '#3b82f6', 'line-opacity': 0.5, 'line-width': 1 } });
     add({
       id: 'explore', type: 'line', source: 'explore', layout: { 'line-cap': 'round' },
-      filter: ['<=', ['get', 'o'], exploreProgress],
+      filter: ['<=', ['get', 'b'], exploreStep],
       paint: {
         'line-color': ['interpolate', ['linear'], ['get', 'o'], 0, '#7fd3ff', 1, '#1f5f99'],
         'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1, 16, 2.5], 'line-opacity': 0.85,
@@ -190,23 +194,26 @@
 
   /** Rues explorées : chaque segment porte `o`, son ordre de découverte (0 → 1). */
   function setExplore(fc) {
-    exploreProgress = 0;
-    setData('explore', fc);
+    exploreStep = -1;
+    fc.features.forEach(f => { f.properties.b = Math.min(STEPS - 1, Math.floor(f.properties.o * STEPS)); });
     if (map.getLayer('explore')) {
-      map.setFilter('explore', ['<=', ['get', 'o'], 0]);
+      map.setFilter('explore', ['<=', ['get', 'b'], -1]);
       map.setPaintProperty('explore', 'line-opacity', 0.85);
     }
+    setData('explore', fc);
   }
   function animateExplore(duration = 2600) {
     return new Promise(resolve => {
       const t0 = performance.now();
-      const step = now => {
-        const f = Math.min(1, (now - t0) / duration);
-        exploreProgress = f;
-        if (map.getLayer('explore')) map.setFilter('explore', ['<=', ['get', 'o'], f]);
-        if (f < 1) requestAnimationFrame(step); else resolve();
+      const tick = now => {
+        const f = Math.min(1, (now - t0) / duration), s = Math.min(STEPS, Math.ceil(f * STEPS));
+        if (s !== exploreStep) {
+          exploreStep = s;
+          if (map.getLayer('explore')) map.setFilter('explore', ['<=', ['get', 'b'], s]);
+        }
+        if (f < 1) requestAnimationFrame(tick); else resolve();
       };
-      requestAnimationFrame(step);
+      requestAnimationFrame(tick);
     });
   }
   function fadeExplore() {

@@ -37,6 +37,12 @@
     </button>
   </div>
 
+  <!-- génération en cours : étape, temps écoulé, annulation -->
+  <div id="gen-bar" class="gen-bar" hidden>
+    <span id="gen-status"></span>
+    <button class="btn" data-action="generate">Annuler</button>
+  </div>
+
   <!-- panneau : replié, il ne montre que le résumé -->
   <section id="sheet" class="sheet">
     <button class="sheet__handle" data-action="toggle-sheet" aria-label="Afficher ou masquer les réglages"><span></span></button>

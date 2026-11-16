@@ -18,7 +18,15 @@
   'use strict';
   const { dist, offset, toXY, pathLength } = HR;
 
-  const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+  // serveurs Overpass publics, interrogés en relais (voir fetchStreets)
+  const OVERPASS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+  ];
+  const RELAY_DELAY = 5000;   // ms avant de solliciter le serveur suivant
+  const MAX_WAIT = 20000;     // ms au total avant de renoncer aux rues
+  const abortError = () => Object.assign(new Error('Génération annulée.'), { name: 'AbortError' });
   const HIGHWAYS = 'trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|footway|path|track|cycleway|steps|service|road';
   // coût relatif par type de voie : on préfère les petites rues et les chemins
   const PENALTY = { trunk: 1.6, primary: 1.3, secondary: 1.1, service: 1.4, steps: 1.5 };
@@ -58,19 +66,51 @@
   }
 
   // ---------- graphe ----------
-  async function fetchStreets(center, radius) {
-    const q = `[out:json][timeout:25];
+  /**
+   * Rues autour de `center`. Les serveurs publics sont souvent saturés : on
+   * interroge le premier, puis le suivant s'il n'a pas répondu après 5 s,
+   * etc. La première réponse gagne, les autres requêtes sont annulées. Au
+   * bout de 20 s sans réponse, on abandonne.
+   */
+  function fetchStreets(center, radius, signal) {
+    const q = `[out:json][timeout:20];
 way(around:${Math.round(radius)},${center.lat.toFixed(6)},${center.lng.toFixed(6)})[highway~"^(${HIGHWAYS})$"][access!~"^(private|no)$"][foot!~"^no$"]->.w;
 .w out body qt;
 node(w.w);
 out skel qt;`;
-    let lastErr;
-    for (const url of OVERPASS) {
-      try {
-        return await HR.getJSON(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), timeout: 30000, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-      } catch (e) { lastErr = e; }
-    }
-    throw lastErr;
+    const race = new AbortController();
+    const stop = () => race.abort();
+    if (signal) signal.addEventListener('abort', stop, { once: true });
+    return new Promise((resolve, reject) => {
+      let failed = 0, done = false;
+      const timers = [];
+      const finish = (ok, value) => {
+        if (done) return;
+        done = true;
+        timers.forEach(clearTimeout);
+        race.abort();
+        if (signal) signal.removeEventListener('abort', stop);
+        ok ? resolve(value) : reject(value);
+      };
+      race.signal.addEventListener('abort', () => finish(false, signal && signal.aborted ? abortError() : new Error('Overpass : délai dépassé')));
+      timers.push(setTimeout(() => finish(false, new Error('Overpass : délai dépassé')), MAX_WAIT));
+      let next = 0;
+      // lance le serveur suivant : après 5 s sans réponse, ou tout de suite si un serveur refuse
+      const launch = () => {
+        if (done || next >= OVERPASS.length) return;
+        const url = OVERPASS[next++];
+        timers.push(setTimeout(launch, RELAY_DELAY));
+        HR.getJSON(url, {
+          method: 'POST', body: 'data=' + encodeURIComponent(q), timeout: MAX_WAIT, signal: race.signal,
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        }).then(data => finish(true, data), err => {
+          if (done) return;
+          console.warn('Overpass', url, err.message);
+          if (++failed === OVERPASS.length) finish(false, err); else launch();
+        });
+      };
+      launch();
+    });
   }
 
   function buildGraph(osm, origin) {
@@ -172,18 +212,27 @@ out skel qt;`;
    * @param target  distance voulue, en mètres
    * @param onExplore(featureCollection) appelé dès que l'exploration est prête
    */
-  async function generate(start, target, { onExplore } = {}) {
+  async function generate(start, target, { onExplore, onStage = () => {}, signal } = {}) {
+    const check = () => { if (signal && signal.aborted) throw abortError(); };
+    const breathe = () => new Promise(r => setTimeout(r, 0)); // laisse l'écran se mettre à jour
     const r0 = target / (2 * Math.PI * TORTUOSITY);
-    const fetchR = Math.min(6000, 2 * r0 * 1.35 + 400);
+    const fetchR = Math.min(5000, 2 * r0 * 1.2 + 300);
     let osm;
+    onStage('download');
     try {
-      osm = await fetchStreets(start, fetchR);
+      osm = await fetchStreets(start, fetchR, signal);
     } catch (e) {
+      if (e.name === 'AbortError') throw e;
       console.warn('Overpass :', e.message);
-      return generateOSRM(start, target);
+      onStage('fallback');
+      return generateOSRM(start, target, signal);
     }
+    check();
+    onStage('explore');
+    await breathe();
     const g = buildGraph(osm, start);
-    if (g.edges.length < 10) return generateOSRM(start, target);
+    osm = null;
+    if (g.edges.length < 10) { onStage('fallback'); return generateOSRM(start, target, signal); }
     const src = nearest(g, start, start);
     const limit = fetchR * 1.4;
     const d = explore(g, src, limit);
@@ -201,9 +250,11 @@ out skel qt;`;
           geometry: { type: 'LineString', coordinates: [[g.lng[a], g.lat[a]], [g.lng[b], g.lat[b]]] },
         });
       }
-      features.sort((p, q) => p.properties.o - q.properties.o);
       onExplore({ type: 'FeatureCollection', features });
     }
+    await breathe();
+    check();
+    onStage('build');
 
     const reachable = i => isFinite(d[i]);
     let best = null;
@@ -221,8 +272,10 @@ out skel qt;`;
       if (!best || err < best.err) best = { ...loop, err, via: [ids[1], ids[2]] };
       if (err < 0.07) break;
       r *= Math.max(0.6, Math.min(1.6, target / loop.distance));
+      await breathe();
+      check();
     }
-    if (!best) return generateOSRM(start, target);
+    if (!best) { onStage('fallback'); return generateOSRM(start, target, signal); }
     return {
       path: best.path, distance: best.distance, source: 'generated', explored: true,
       points: [{ lat: g.lat[src], lng: g.lng[src] }, ...best.via.map(i => ({ lat: g.lat[i], lng: g.lng[i] }))],
@@ -230,10 +283,11 @@ out skel qt;`;
   }
 
   /** Repli sans Overpass : mêmes points sur un cercle, itinéraire par OSRM. */
-  async function generateOSRM(start, target) {
+  async function generateOSRM(start, target, signal) {
     let r = target / (2 * Math.PI * TORTUOSITY), best = null;
     const bearing = Math.random() * 360;
     for (let attempt = 0; attempt < 4; attempt++) {
+      if (signal && signal.aborted) throw abortError();
       const c = offset(start, r, bearing);
       const pts = [start, offset(c, r, bearing + 300), offset(c, r, bearing + 60)];
       let res;

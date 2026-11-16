@@ -145,15 +145,19 @@ window.HR = window.HR || {};
     set(k, v) { try { localStorage.setItem('haresrun.' + k, JSON.stringify(v)); } catch { /* navigation privée */ } },
     del(k) { try { localStorage.removeItem('haresrun.' + k); } catch { /* idem */ } },
   };
-  async function getJSON(url, { timeout = 15000, ...opts } = {}) {
+  /** fetch + JSON avec délai maximal ; `signal` permet d'annuler de l'extérieur. */
+  async function getJSON(url, { timeout = 15000, signal, ...opts } = {}) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), timeout);
+    const onAbort = () => ctrl.abort();
+    if (signal) { if (signal.aborted) ctrl.abort(); else signal.addEventListener('abort', onAbort, { once: true }); }
     try {
       const res = await fetch(url, { ...opts, signal: ctrl.signal, headers: { Accept: 'application/json', ...(opts.headers || {}) } });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return await res.json();
     } finally {
       clearTimeout(t);
+      if (signal) signal.removeEventListener('abort', onAbort);
     }
   }
   const sleep = ms => new Promise(r => setTimeout(r, ms));

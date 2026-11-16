@@ -135,7 +135,7 @@
   const fitRoute = () => MV.fit(route ? route.path : state.points, padding());
 
   function onMapClick(ll) {
-    if (document.body.classList.contains('is-following')) return;
+    if (document.body.classList.contains('is-following') || viewer) return;
     if (state.mode === 'random') {
       // en mode aléatoire, toucher la carte choisit le départ de la boucle
       snapshot();
@@ -187,13 +187,14 @@
    * `fit` : recadrer la carte ; `draw` : afficher le tracé tout de suite
    * (non quand il va être dessiné en animation).
    */
-  function loadRoute({ points, loop, path, distance, source, name, id }, { fit = true, draw = true } = {}) {
+  function loadRoute({ points, loop, path, distance, source, name, id, shared }, { fit = true, draw = true } = {}) {
     snapshot();
     state.points = points.map(p => ({ id: uid(), lat: p.lat, lng: p.lng, label: p.label || '' }));
     state.loop = !!loop;
     state.name = name || state.name;
     state.savedId = id || null;
-    state.fixed = { sig: sig(), path: typeof path === 'string' ? path : encodePolyline(path), distance, source: source || 'fixed' };
+    // `shared` : reçu par un lien (le suivre demande un compte)
+    state.fixed = { sig: sig(), path: typeof path === 'string' ? path : encodePolyline(path), distance, source: source || 'fixed', shared: !!shared };
     $('#loop').checked = state.loop;
     state.points.forEach(p => { if (!p.label) nameIt(p); });
     save(); renderPins(); renderPoints(); renderRandomFrom();
@@ -439,6 +440,10 @@
   let autoCenter = true, followCum = null;
   function startFollow() {
     if (!route) return toast('Trace ou charge d’abord un trajet.');
+    // suivre un trajet reçu par lien est réservé aux comptes
+    if ((viewer || (state.fixed && state.fixed.shared && state.fixed.sig === sig())) && !HR.store.user) {
+      return requireLogin('Connecte-toi (ou crée un compte) pour suivre ce trajet.', startFollow);
+    }
     document.body.classList.add('is-following');
     $('#follow-ui').hidden = false;
     autoCenter = true;
@@ -504,6 +509,8 @@
   }
   async function share() {
     if (!route) return toast('Pas encore de trajet à partager.');
+    // partager est réservé aux comptes
+    if (!HR.store.user) return requireLogin('Crée un compte ou connecte-toi pour partager tes trajets.', share);
     const url = shareLink(), title = state.name || `Trajet de ${fmt.km(route.distance)} km`;
     if (navigator.share) {
       try { await navigator.share({ title: `HARES RUN — ${title}`, text: `${title} (${fmt.km(route.distance)} km)`, url }); return; } catch (e) { if (e.name === 'AbortError') return; }
@@ -519,7 +526,7 @@
       const d = JSON.parse(b64.dec(m[1]));
       const points = decodePolyline(d.p), path = decodePolyline(d.g);
       if (points.length < 2 || path.length < 2) return null;
-      return { points, path: d.g, loop: !!d.l, distance: d.d, source: d.s ? 'straight' : 'shared', name: d.n };
+      return { points, path: d.g, loop: !!d.l, distance: d.d, source: d.s ? 'straight' : 'shared', name: d.n, shared: true };
     } catch (e) {
       console.warn('Lien partagé illisible :', e.message);
       toast('Ce lien de trajet est incomplet ou abîmé.');
@@ -745,7 +752,8 @@
       forgot,
       'sign-out': async () => { try { await HR.store.auth.signOut(); $('#account-dialog').close(); } catch (e) { toast(e.message); } },
       'shared-follow': () => { $('#shared-dialog').close(); startFollow(); },
-      'shared-save': () => { $('#shared-dialog').close(); openSave(); },
+      'shared-save': () => { $('#shared-dialog').close(); viewer ? requireLogin('Connecte-toi pour enregistrer ce trajet.', openSave) : openSave(); },
+      'gate-back': () => { $('#gate').hidden = true; document.body.classList.remove('is-locked'); afterLogin = null; },
     };
     document.addEventListener('click', e => {
       const el = e.target.closest('[data-action]');
@@ -797,18 +805,45 @@
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
   }
-  function openGate() {
+  function openGate(message) {
     $('#gate-auth').hidden = !HR.store.enabled;
     $('#gate-sep').hidden = !HR.store.enabled;
+    $('#gate-back').hidden = !viewer; // depuis un lien partagé : retour au trajet possible
     $('#gate').hidden = false;
     document.body.classList.add('is-locked');
     document.body.classList.remove('is-booting');
     $$('dialog[open]').forEach(d => d.close());
+    gateMsg(message || '', 'ok');
   }
   function closeGate() {
     $('#gate').hidden = true;
     document.body.classList.remove('is-locked', 'is-booting');
     grantAccess();
+  }
+
+  // ---------- consultation d'un lien partagé, sans compte ----------
+  // Sans compte (ni clé), un lien partagé montre le trajet sur la carte,
+  // sans rien d'autre : pour le suivre ou l'enregistrer, il faut se connecter.
+  let viewer = false, afterLogin = null;
+  function enterViewer() {
+    viewer = true;
+    document.body.classList.add('is-viewer');
+    document.body.classList.remove('is-booting', 'is-locked');
+    $('#gate').hidden = true;
+    collapseSheet(true);
+  }
+  function leaveViewer() {
+    if (!viewer) return;
+    viewer = false;
+    document.body.classList.remove('is-viewer');
+  }
+  /** Demande une connexion avant `next` (partager, suivre un trajet partagé…). */
+  function requireLogin(message, next) {
+    if (HR.store.user) return next();
+    if (!HR.store.enabled) return toast('Les comptes ne sont pas encore activés sur ce site.', 5000);
+    afterLogin = next;
+    if (viewer) openGate(message);
+    else { openAccount(); authMsg(message, 'ok'); }
   }
   function gateMsg(text, kind = 'error') {
     const m = $('#gate-msg');
@@ -869,24 +904,29 @@
     $('#style-btn').textContent = MV.STYLES[state.style].name;
     renderPoints(); renderRandomFrom(); renderStats();
 
-    // compte : session éventuelle, puis décision d'accès
+    const shared = readSharedLink();
+
+    // compte : session éventuelle, puis décision d'accès. Un lien partagé
+    // s'ouvre toujours, en consultation, même sans compte.
     const storeReady = HR.store.init().catch(e => console.warn('Comptes :', e.message)).then(() => {
       renderAccountBtn();
-      if (hasKeyAccess() || HR.store.user) closeGate(); else openGate();
+      if (hasKeyAccess() || HR.store.user) closeGate();
+      else if (shared) enterViewer();
+      else openGate();
     });
     HR.store.onAuth((event, u) => {
       renderAccountBtn();
-      if (event === 'PASSWORD_RECOVERY') { closeGate(); openAccount('newpass'); }
+      if (event === 'PASSWORD_RECOVERY') { leaveViewer(); closeGate(); openAccount('newpass'); }
       else if (event === 'SIGNED_IN') {
-        if (!$('#gate').hidden) { closeGate(); toast(`Bienvenue, ${u.email}`); }
+        if (viewer || !$('#gate').hidden) { leaveViewer(); closeGate(); toast(`Bienvenue, ${u.email}`); }
         else if ($('#account-dialog').open && $('#newpass-form').hidden) { $('#account-dialog').close(); toast(`Connecté : ${u.email}`); }
+        // l'action qui attendait la connexion (partager, suivre…)
+        if (afterLogin) { const next = afterLogin; afterLogin = null; setTimeout(next, 400); }
       } else if (event === 'SIGNED_OUT') {
         toast('Déconnecté.');
         if (!hasKeyAccess()) openGate();
       }
     });
-
-    const shared = readSharedLink();
     if (shared && state.points.length) LS.set('backup', state);
     const center = shared ? shared.points[0] : state.points[0] || CFG.defaultCenter;
     try {
@@ -907,12 +947,19 @@
 
     // le reste attend l'accès : pas de demande de localisation derrière l'écran d'entrée
     await storeReady;
-    await accessGranted;
-    if (shared) {
+    let sharedShown = false;
+    const showShared = () => {
+      sharedShown = true;
       $('#shared-title').textContent = shared.name || 'Trajet partagé';
       $('#shared-meta').textContent = `${fmt.km(shared.distance)} km${shared.loop ? ' · boucle' : ''}`;
+      const needLogin = !HR.store.user;
+      $('#shared-note').hidden = !needLogin;
+      $('[data-action="shared-follow"]').textContent = needLogin ? 'Se connecter pour suivre' : 'Suivre ce trajet';
       $('#shared-dialog').showModal();
-    }
+    };
+    if (shared && viewer) showShared(); // consultation sans compte : visible tout de suite
+    await accessGranted;
+    if (shared && !sharedShown) showShared();
     startWatch();
     if (!state.points.length && !shared) locate({ quiet: true }).then(prefetchStreets);
     else prefetchStreets();

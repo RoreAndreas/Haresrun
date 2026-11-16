@@ -51,14 +51,27 @@ l'arrivée d'un suivi GPS.
 
 ## Accès
 
-L'appli s'ouvre sur un écran d'entrée : il faut **se connecter** (ou créer
-un compte), ou saisir la **clé d'accès**. La clé est vérifiée par son
-empreinte SHA-256 (elle n'apparaît pas en clair dans le code) et reste
-mémorisée sur l'appareil. C'est un verrou d'interface : le code d'un site
-web étant public, il décourage l'accès sans être une protection forte. Les
-trajets enregistrés, eux, sont protégés par les règles Supabase.
+L'appli s'ouvre sur un écran d'entrée : **se connecter** (ou créer un
+compte), ou saisir la **clé d'accès**.
 
-Pour changer la clé : calculer l'empreinte de la nouvelle
+| | Sans compte (clé d'accès) | Avec un compte |
+|---|---|---|
+| Tracer, générer, suivre ses trajets | oui | oui |
+| Mes trajets | sur cet appareil seulement (perdus si on efface les données du navigateur) | en ligne, sur tous ses appareils |
+| Partager un trajet | non | oui |
+| Ouvrir un lien partagé | oui, pour le voir | oui |
+| Suivre un trajet partagé | non | oui |
+
+Sans compte ni clé, un lien partagé s'ouvre quand même, en consultation :
+le trajet s'affiche, mais pour le suivre ou l'enregistrer il faut se
+connecter (le suivi démarre aussitôt après la connexion).
+
+La clé est vérifiée par son empreinte SHA-256 (elle n'apparaît pas en
+clair dans le code) et reste mémorisée sur l'appareil. C'est un verrou
+d'interface : le code d'un site web étant public, il décourage l'accès
+sans être une protection forte. Les trajets enregistrés, eux, sont
+protégés par les règles Supabase. Pour changer la clé : calculer
+l'empreinte de la nouvelle
 (`node -e "console.log(require('crypto').createHash('sha256').update('NOUVELLE_CLE').digest('hex'))"`)
 et la mettre dans `KEY_HASH` (`site/js/app.js`).
 
@@ -103,7 +116,7 @@ envois par heure : pour un vrai lancement, brancher un service d'envoi
   l'arrivée (D = départ, A = arrivée) : on ne revient pas au départ, sauf
   si l'on coche **Retour au départ**. Ajouter un point à une boucle
   générée en fait un aller simple jusqu'à ce point. Les repères se
-  déplacent en les glissant ; **Suivre les chemins** décoché relie les
+  déplacent en les glissant ; **Par les rues** décoché relie les
   points en ligne droite.
 - **Aléatoire** : on choisit la distance, HARES RUN récupère les rues
   autour du départ, les explore depuis le départ par l'algorithme de
@@ -152,7 +165,7 @@ héberger ses propres serveurs d'itinéraires et de tuiles.
 
 OpenStreetMap est fait par ses utilisateurs : un sentier peut manquer. Le
 bouton de fond (en bas à droite) passe à « Complète » ou « Satellite » ;
-« Suivre les chemins » décoché permet de tracer hors des chemins connus ;
+« Par les rues » décoché permet de tracer hors des chemins connus ;
 le lien « Un chemin manque ? » ouvre l'éditeur OpenStreetMap à l'endroit
 affiché pour l'ajouter, pour tout le monde.
 

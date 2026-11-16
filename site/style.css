@@ -45,7 +45,7 @@ a { color: var(--accent); }
 .explore-layer { position: absolute; left: 0; top: 0; pointer-events: none; transition: opacity .6s ease; }
 
 /* ---------- verre ---------- */
-.glass, .icon-btn, .chip, .sheet, .gen-bar, .follow__stats, .follow__status, .dialog, .toast, .logo {
+.glass, .icon-btn, .chip, .sheet, .gen-bar, .follow__stats, .follow__status, .dialog, .toast {
   background: var(--glass);
   -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur);
   border: 1px solid var(--glass-edge);
@@ -108,9 +108,12 @@ a { color: var(--accent); }
 }
 .top > * { pointer-events: auto; }
 .logo {
-  display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 15px;
-  font-weight: 800; letter-spacing: .14em; font-size: 14px;
+  /* sans bulle : le nom posé sur la carte, lisible grâce à son ombre */
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 2px;
+  font-weight: 800; letter-spacing: .14em; font-size: 15px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .9), 0 0 12px rgba(0, 0, 0, .7);
 }
+.logo .hares { filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .8)); }
 .logo__dot {
   width: 10px; height: 10px; border-radius: 50%; display: inline-block;
   background: radial-gradient(circle at 35% 35%, #c9f6ff, var(--accent) 55%, var(--accent-2));
@@ -149,9 +152,7 @@ a { color: var(--accent); }
   border-radius: 26px; padding: 0 14px 12px;
   max-height: 72vh; display: flex; flex-direction: column;
 }
-.sheet__handle { border: 0; background: none; padding: 9px 0 5px; cursor: pointer; width: 100%; }
-.sheet__handle span { display: block; width: 42px; height: 5px; margin: 0 auto; border-radius: 3px; background: rgba(255, 255, 255, .28); }
-.sheet__summary { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.sheet__summary { display: flex; align-items: center; gap: 8px; padding: 12px 0 10px; }
 .sum { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .sum b { font-size: 28px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .sum small { margin-left: 4px; color: var(--muted); }
@@ -319,6 +320,8 @@ body.is-following .maplibregl-ctrl-bottom-right { bottom: 76px; }
 .gate__key .input::placeholder { letter-spacing: normal; }
 .gate__key .btn { flex: none; }
 .gate__err { color: var(--finish); margin: -4px 0 0; text-align: center; }
+/* consultation d'un lien partagé sans compte : la carte et le trajet, rien d'autre */
+body.is-viewer .sheet__body, body.is-viewer #details-btn, body.is-viewer [data-action="open-library"] { display: none !important; }
 body.is-booting .top, body.is-booting .tools, body.is-booting .sheet,
 body.is-locked .top, body.is-locked .tools, body.is-locked .sheet { visibility: hidden; }
 
@@ -337,7 +340,7 @@ body.is-locked .top, body.is-locked .tools, body.is-locked .sheet { visibility: 
 
   /* téléphone : panneaux opaques, sans effet verre — plus lisibles en plein
      soleil et plus fluides sur une carte qui bouge */
-  .glass, .icon-btn, .chip, .sheet, .gen-bar, .follow__stats, .follow__status, .dialog, .toast, .logo {
+  .glass, .icon-btn, .chip, .sheet, .gen-bar, .follow__stats, .follow__status, .dialog, .toast {
     -webkit-backdrop-filter: none; backdrop-filter: none;
     background: #121821; border-color: rgba(255, 255, 255, .09);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 6px 20px rgba(0, 0, 0, .45);

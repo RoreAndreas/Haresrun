@@ -18,7 +18,7 @@
 
   <!-- barre du haut -->
   <header class="top">
-    <span class="logo glass"><i class="hares hares--stand logo__hares" aria-hidden="true"></i>HARES RUN</span>
+    <span class="logo"><i class="hares hares--stand logo__hares" aria-hidden="true"></i>HARES RUN</span>
     <div class="top__actions">
       <button class="icon-btn" data-action="open-library" aria-label="Mes trajets" title="Mes trajets">
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
@@ -46,7 +46,6 @@
 
   <!-- panneau : replié, il ne montre que le résumé -->
   <section id="sheet" class="sheet">
-    <button class="sheet__handle" data-action="toggle-sheet" aria-label="Afficher ou masquer les réglages"><span></span></button>
 
     <div class="sheet__summary">
       <div class="sum">
@@ -75,7 +74,7 @@
         </div>
         <div class="row row--between">
           <label class="check" title="Coché : le trajet revient au départ après le dernier point"><input id="loop" type="checkbox"> Retour au départ</label>
-          <label class="check" title="Décoché : les points sont reliés en ligne droite"><input id="roads" type="checkbox"> Suivre les chemins</label>
+          <label class="check" title="Coché : le trajet passe par les rues et chemins de la carte. Décoché : les points sont reliés en ligne droite (piste, plage, sentier absent de la carte)."><input id="roads" type="checkbox"> Par les rues</label>
         </div>
         <form id="search" class="search" autocomplete="off">
           <input id="search-input" type="search" placeholder="Aller à un lieu ou des coordonnées" enterkeyhint="search">
@@ -199,6 +198,7 @@
       <button class="icon-btn" data-close aria-label="Fermer">✕</button>
     </div>
     <p id="shared-meta" class="muted"></p>
+    <p id="shared-note" class="small muted" hidden>Tu peux voir ce trajet sans compte. Pour le suivre avec ton GPS ou l'enregistrer, connecte-toi ou crée un compte (gratuit).</p>
     <div class="form">
       <button class="btn btn--accent btn--block" data-action="shared-follow">Suivre ce trajet</button>
       <button class="btn btn--block" data-action="shared-save">Enregistrer dans mes trajets</button>
@@ -247,6 +247,7 @@
         <button class="btn" type="submit">Entrer</button>
       </form>
       <p id="gate-key-msg" class="small gate__err" hidden></p>
+      <button class="link" type="button" id="gate-back" data-action="gate-back" hidden>Revenir au trajet partagé</button>
     </div>
   </section>
 

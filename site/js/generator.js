@@ -1,8 +1,8 @@
 /*
  * Générateur de boucles de N km (départ = arrivée).
  *
- * 1. Les rues praticables à pied autour du départ sont téléchargées depuis
- *    OpenStreetMap (API Overpass) et transformées en graphe.
+ * 1. Le réseau des rues autour du départ vient de HR.streets (tuiles de la
+ *    carte, ou Overpass en secours ; souvent déjà préchargé).
  * 2. Un algorithme de Dijkstra explore ce graphe depuis le départ, rue par
  *    rue, dans l'ordre des distances : c'est ce qu'affiche l'animation.
  * 3. La boucle passe par deux points posés sur un cercle qui touche le
@@ -11,26 +11,17 @@
  *    allers-retours. Le rayon est ajusté jusqu'à tomber à ±7 % de la
  *    distance voulue.
  *
- * Si Overpass ne répond pas, on se rabat sur le service d'itinéraire OSRM,
- * sans animation d'exploration.
+ * Si aucun réseau de rues n'est disponible, on se rabat sur le service
+ * d'itinéraire OSRM, sans animation d'exploration.
  */
 (() => {
   'use strict';
-  const { dist, offset, toXY, pathLength } = HR;
-
-  // serveurs Overpass publics, interrogés en relais (voir fetchStreets)
-  const OVERPASS = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.private.coffee/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-  ];
-  const RELAY_DELAY = 5000;   // ms avant de solliciter le serveur suivant
-  const MAX_WAIT = 20000;     // ms au total avant de renoncer aux rues
-  const abortError = () => Object.assign(new Error('Génération annulée.'), { name: 'AbortError' });
-  const HIGHWAYS = 'trunk|primary|secondary|tertiary|unclassified|residential|living_street|pedestrian|footway|path|track|cycleway|steps|service|road';
-  // coût relatif par type de voie : on préfère les petites rues et les chemins
-  const PENALTY = { trunk: 1.6, primary: 1.3, secondary: 1.1, service: 1.4, steps: 1.5 };
+  const { offset, pathLength } = HR;
   const TORTUOSITY = 1.3; // une boucle réelle est ~30 % plus longue que le cercle idéal
+  const abortError = () => Object.assign(new Error('Génération annulée.'), { name: 'AbortError' });
+
+  /** Rayon de rues nécessaire pour une boucle de `target` mètres. */
+  const needRadius = target => Math.min(5000, 2 * target / (2 * Math.PI * TORTUOSITY) * 1.2 + 300);
 
   // ---------- tas binaire (file de priorité) ----------
   class Heap {
@@ -65,98 +56,26 @@
     }
   }
 
-  // ---------- graphe ----------
-  /**
-   * Rues autour de `center`. Les serveurs publics sont souvent saturés : on
-   * interroge le premier, puis le suivant s'il n'a pas répondu après 5 s,
-   * etc. La première réponse gagne, les autres requêtes sont annulées. Au
-   * bout de 20 s sans réponse, on abandonne.
-   */
-  function fetchStreets(center, radius, signal) {
-    const q = `[out:json][timeout:20];
-way(around:${Math.round(radius)},${center.lat.toFixed(6)},${center.lng.toFixed(6)})[highway~"^(${HIGHWAYS})$"][access!~"^(private|no)$"][foot!~"^no$"]->.w;
-.w out body qt;
-node(w.w);
-out skel qt;`;
-    const race = new AbortController();
-    const stop = () => race.abort();
-    if (signal) signal.addEventListener('abort', stop, { once: true });
-    return new Promise((resolve, reject) => {
-      let failed = 0, done = false;
-      const timers = [];
-      const finish = (ok, value) => {
-        if (done) return;
-        done = true;
-        timers.forEach(clearTimeout);
-        race.abort();
-        if (signal) signal.removeEventListener('abort', stop);
-        ok ? resolve(value) : reject(value);
-      };
-      race.signal.addEventListener('abort', () => finish(false, signal && signal.aborted ? abortError() : new Error('Overpass : délai dépassé')));
-      timers.push(setTimeout(() => finish(false, new Error('Overpass : délai dépassé')), MAX_WAIT));
-      let next = 0;
-      // lance le serveur suivant : après 5 s sans réponse, ou tout de suite si un serveur refuse
-      const launch = () => {
-        if (done || next >= OVERPASS.length) return;
-        const url = OVERPASS[next++];
-        timers.push(setTimeout(launch, RELAY_DELAY));
-        HR.getJSON(url, {
-          method: 'POST', body: 'data=' + encodeURIComponent(q), timeout: MAX_WAIT, signal: race.signal,
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        }).then(data => finish(true, data), err => {
-          if (done) return;
-          console.warn('Overpass', url, err.message);
-          if (++failed === OVERPASS.length) finish(false, err); else launch();
-        });
-      };
-      launch();
-    });
-  }
-
-  function buildGraph(osm, origin) {
-    const idx = new Map(), lat = [], lng = [], x = [], y = [];
-    for (const el of osm.elements) {
-      if (el.type !== 'node') continue;
-      idx.set(el.id, lat.length);
-      lat.push(el.lat); lng.push(el.lon);
-      const p = toXY({ lat: el.lat, lng: el.lon }, origin);
-      x.push(p.x); y.push(p.y);
-    }
-    const adj = Array.from({ length: lat.length }, () => []);
-    const edges = []; // [a, b, longueur, pénalité]
-    for (const el of osm.elements) {
-      if (el.type !== 'way' || !el.nodes) continue;
-      const pen = PENALTY[el.tags && el.tags.highway] || 1;
-      for (let i = 1; i < el.nodes.length; i++) {
-        const a = idx.get(el.nodes[i - 1]), b = idx.get(el.nodes[i]);
-        if (a == null || b == null || a === b) continue;
-        const len = Math.hypot(x[a] - x[b], y[a] - y[b]), e = edges.length;
-        edges.push([a, b, len, pen]);
-        adj[a].push(e); adj[b].push(e);
-      }
-    }
-    return { lat, lng, x, y, adj, edges, n: lat.length };
-  }
-
-  function nearest(g, p, origin, filter) {
-    const q = toXY(p, origin);
+  // ---------- algorithmes sur le graphe ----------
+  function nearest(g, p, filter) {
+    const kx = Math.PI / 180 * 6371008.8 * Math.cos(g.origin.lat * Math.PI / 180), ky = Math.PI / 180 * 6371008.8;
+    const qx = (p.lng - g.origin.lng) * kx, qy = (p.lat - g.origin.lat) * ky;
     let best = -1, bd = Infinity;
     for (let i = 0; i < g.n; i++) {
       if (!g.adj[i].length || (filter && !filter(i))) continue;
-      const d = (g.x[i] - q.x) ** 2 + (g.y[i] - q.y) ** 2;
+      const d = (g.x[i] - qx) ** 2 + (g.y[i] - qy) ** 2;
       if (d < bd) { bd = d; best = i; }
     }
     return best;
   }
 
-  /** Dijkstra depuis `src` jusqu'à `limit` mètres : distances + ordre de découverte. */
+  /** Dijkstra depuis `src` jusqu'à `limit` mètres : distance de chaque nœud. */
   function explore(g, src, limit) {
     const d = new Float64Array(g.n).fill(Infinity);
     const heap = new Heap();
     d[src] = 0; heap.push(0, src);
     while (heap.size) {
-      const u = heap.pop();
-      const du = d[u];
+      const u = heap.pop(), du = d[u];
       if (du > limit) break;
       for (const e of g.adj[u]) {
         const [a, b, len] = g.edges[e], v = a === u ? b : a, nd = du + len;
@@ -166,12 +85,12 @@ out skel qt;`;
     return d;
   }
 
-  /** A* de `s` à `t`, pénalités de voie et rues déjà prises (`used`). */
+  /** A* de `s` à `t`, avec pénalités de voie et rues déjà prises (`used`). */
   function astar(g, s, t, used) {
     const gs = new Float64Array(g.n).fill(Infinity), prev = new Int32Array(g.n).fill(-1);
     const heap = new Heap(), h = i => Math.hypot(g.x[i] - g.x[t], g.y[i] - g.y[t]);
-    gs[s] = 0; heap.push(h(s), s);
     const closed = new Uint8Array(g.n);
+    gs[s] = 0; heap.push(h(s), s);
     while (heap.size) {
       const u = heap.pop();
       if (u === t) break;
@@ -179,7 +98,7 @@ out skel qt;`;
       closed[u] = 1;
       for (const e of g.adj[u]) {
         const [a, b, len, pen] = g.edges[e], v = a === u ? b : a;
-        const cost = len * pen * (used.has(e) ? 5 : 1), ng = gs[u] + cost;
+        const ng = gs[u] + len * pen * (used.has(e) ? 5 : 1);
         if (ng < gs[v]) { gs[v] = ng; prev[v] = e; heap.push(ng + h(v), v); }
       }
     }
@@ -210,41 +129,40 @@ out skel qt;`;
   /**
    * @param start   point de départ (= arrivée)
    * @param target  distance voulue, en mètres
-   * @param onExplore(featureCollection) appelé dès que l'exploration est prête
+   * @param opts.onExplore(featureCollection) dès que l'exploration est prête
+   * @param opts.onStage(étape) : download | slow | explore | build | fallback
+   * @param opts.signal AbortSignal pour annuler
    */
   async function generate(start, target, { onExplore, onStage = () => {}, signal } = {}) {
     const check = () => { if (signal && signal.aborted) throw abortError(); };
     const breathe = () => new Promise(r => setTimeout(r, 0)); // laisse l'écran se mettre à jour
-    const r0 = target / (2 * Math.PI * TORTUOSITY);
-    const fetchR = Math.min(5000, 2 * r0 * 1.2 + 300);
-    let osm;
+    const r0 = target / (2 * Math.PI * TORTUOSITY), need = needRadius(target);
     onStage('download');
+    let g;
     try {
-      osm = await fetchStreets(start, fetchR, signal);
+      g = await HR.streets.load(start, need, { signal, onSlow: () => onStage('slow') });
     } catch (e) {
       if (e.name === 'AbortError') throw e;
-      console.warn('Overpass :', e.message);
+      console.warn('Rues :', e.message);
       onStage('fallback');
       return generateOSRM(start, target, signal);
     }
     check();
     onStage('explore');
     await breathe();
-    const g = buildGraph(osm, start);
-    osm = null;
-    if (g.edges.length < 10) { onStage('fallback'); return generateOSRM(start, target, signal); }
-    const src = nearest(g, start, start);
-    const limit = fetchR * 1.4;
+    const src = nearest(g, start);
+    if (src < 0) { onStage('fallback'); return generateOSRM(start, target, signal); }
+    const limit = need * 1.4;
     const d = explore(g, src, limit);
 
-    // animation : chaque rue explorée, numérotée par sa distance au départ
+    // animation : chaque rue explorée, repérée par sa distance au départ
     if (onExplore) {
       let far = 0;
-      for (const v of d) if (isFinite(v) && v > far) far = v;
+      for (const v of d) if (v <= limit && v > far) far = v;
       const features = [];
       for (const [a, b] of g.edges) {
         const da = d[a], db = d[b];
-        if (!isFinite(da) || !isFinite(db)) continue;
+        if (!(da <= limit) || !(db <= limit)) continue;
         features.push({
           type: 'Feature', properties: { o: Math.max(da, db) / (far || 1) },
           geometry: { type: 'LineString', coordinates: [[g.lng[a], g.lat[a]], [g.lng[b], g.lat[b]]] },
@@ -256,15 +174,14 @@ out skel qt;`;
     check();
     onStage('build');
 
-    const reachable = i => isFinite(d[i]);
-    let best = null;
-    let bearing = Math.random() * 360, r = r0;
+    const reachable = i => d[i] <= limit;
+    let best = null, bearing = Math.random() * 360, r = r0;
     for (let attempt = 0; attempt < 10; attempt++) {
       if (attempt && attempt % 4 === 0) { bearing = Math.random() * 360; r = r0; }
       const c = offset(start, r, bearing);
       // départ vu du centre : bearing + 180 ; deux points à ±120° de là
       const A = offset(c, r, bearing + 180 + 120), B = offset(c, r, bearing + 180 - 120);
-      const ids = [src, nearest(g, A, start, reachable), nearest(g, B, start, reachable), src];
+      const ids = [src, nearest(g, A, reachable), nearest(g, B, reachable), src];
       if (ids.some(i => i < 0) || ids[1] === ids[2]) { r *= 1.15; continue; }
       const loop = loopThrough(g, ids);
       if (!loop) { bearing = Math.random() * 360; continue; }
@@ -277,12 +194,12 @@ out skel qt;`;
     }
     if (!best) { onStage('fallback'); return generateOSRM(start, target, signal); }
     return {
-      path: best.path, distance: best.distance, source: 'generated', explored: true,
+      path: best.path, distance: best.distance, source: 'generated', explored: true, streets: g.source,
       points: [{ lat: g.lat[src], lng: g.lng[src] }, ...best.via.map(i => ({ lat: g.lat[i], lng: g.lng[i] }))],
     };
   }
 
-  /** Repli sans Overpass : mêmes points sur un cercle, itinéraire par OSRM. */
+  /** Repli sans réseau de rues : mêmes points sur un cercle, itinéraire par OSRM. */
   async function generateOSRM(start, target, signal) {
     let r = target / (2 * Math.PI * TORTUOSITY), best = null;
     const bearing = Math.random() * 360;
@@ -301,7 +218,11 @@ out skel qt;`;
     return { path: best.path, distance: best.distance, source: 'generated', explored: false, points: best.points };
   }
 
-  HR.generator = { generate };
-  // exposé pour les tests
-  HR.generator._internal = { buildGraph, explore, astar, dist };
+  /** Précharge les rues pour une future boucle de `target` mètres depuis `start`. */
+  function prefetch(start, target) {
+    // marge de 30 % : couvre un départ un peu déplacé ou quelques km de plus
+    if (start) HR.streets.prefetch(start, Math.min(6000, needRadius(target) * 1.3));
+  }
+
+  HR.generator = { generate, prefetch };
 })();

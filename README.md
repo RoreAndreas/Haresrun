@@ -24,7 +24,8 @@ haresrun/
 │   ├── js/
 │   │   ├── app.js         interface et logique de l'appli
 │   │   ├── mapview.js     carte MapLibre, styles, tracé, animations
-│   │   ├── generator.js   boucles aléatoires (graphe des rues, Dijkstra, A*)
+│   │   ├── generator.js   boucles aléatoires (Dijkstra, A*)
+│   │   ├── streets.js     réseau des rues : tuiles de la carte, Overpass, cache
 │   │   ├── follow.js      suivi GPS d'un trajet
 │   │   ├── store.js       comptes et bibliothèque (Supabase ou appareil)
 │   │   ├── services.js    itinéraires, altitudes, recherche d'adresses
@@ -76,12 +77,19 @@ envois par heure : pour un vrai lancement, brancher un service d'envoi
   l'arrivée (D = départ, A = arrivée). Les repères se déplacent en les
   glissant. **Boucle** ramène au départ ; **Suivre les chemins** décoché
   relie les points en ligne droite.
-- **Aléatoire** : on choisit la distance, HARES RUN télécharge les rues
-  autour du départ (OpenStreetMap, via Overpass), les explore depuis le
-  départ par l'algorithme de Dijkstra — c'est l'animation, les rues
-  s'allument par ordre de distance — puis construit une boucle passant par
-  deux points tirés au hasard, chaque tronçon calculé par A* en évitant de
-  repasser par les mêmes rues. La distance est ajustée à ±7 %.
+- **Aléatoire** : on choisit la distance, HARES RUN récupère les rues
+  autour du départ, les explore depuis le départ par l'algorithme de
+  Dijkstra — c'est l'animation, les rues s'allument par ordre de distance —
+  puis construit une boucle passant par deux points tirés au hasard, chaque
+  tronçon calculé par A* en évitant de repasser par les mêmes rues. La
+  distance est ajustée à ±7 %. Une boucle sort en moins d'une seconde :
+  - les rues sont lues directement dans les tuiles vectorielles de la carte
+    (OpenFreeMap, niveau de détail maximal), servies par un CDN et souvent
+    déjà en cache — pas de serveur lent à attendre ;
+  - elles sont préchargées dès l'ouverture de l'onglet « Aléatoire », et
+    gardées en mémoire : « Générer » à nouveau est immédiat ;
+  - si les tuiles ne répondent pas, l'API Overpass prend le relais (plus
+    lente), puis, en dernier recours, un calcul simple sans animation.
 - **Suivre** : l'écran reste allumé pendant le suivi. Un site web ne peut
   lire le GPS que page ouverte et écran allumé : téléphone verrouillé, le
   suivi s'arrête (il faudrait une appli mobile installée pour ça).

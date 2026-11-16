@@ -101,6 +101,7 @@
     renderPoints();
     renderRandomFrom();
     scheduleRoute();
+    prefetchStreets();
   }
 
   // ---------- carte ----------
@@ -206,6 +207,22 @@
     });
   }
 
+  /**
+   * Préchargement des rues dès qu'une boucle devient probable (onglet
+   * Aléatoire ouvert, départ ou distance changés) : au moment de toucher
+   * « Générer », elles sont déjà là.
+   */
+  let prefetchTimer;
+  function prefetchStreets() {
+    if (state.mode !== 'random') return;
+    clearTimeout(prefetchTimer);
+    prefetchTimer = setTimeout(() => {
+      const c = MV.map && MV.map.getCenter();
+      const start = state.points[0] || myPos || (c && { lat: c.lat, lng: c.lng });
+      HR.generator.prefetch(start, state.randKm * 1000);
+    }, 400);
+  }
+
   function renderRandomFrom() {
     $('#rand-km').value = state.randKm;
     $('#rand-from').textContent = state.points.length
@@ -224,6 +241,7 @@
     state.mode = m; save();
     $$('.seg__btn[data-mode]').forEach(b => b.classList.toggle('is-on', b.dataset.mode === m));
     $$('[data-pane]').forEach(p => (p.hidden = p.dataset.pane !== m));
+    prefetchStreets();
   }
 
   // ---------- allure ----------
@@ -340,7 +358,8 @@
   let genCtrl = null;
   const STAGES = {
     position: 'Recherche de ta position',
-    download: 'Téléchargement des rues',
+    download: 'Chargement des rues',
+    slow: 'Téléchargement des rues (serveur lent)',
     explore: 'Exploration des rues',
     build: 'Construction de la boucle',
     fallback: 'Calcul de la boucle (sans animation)',
@@ -372,14 +391,14 @@
       const res = await HR.generator.generate(start, km * 1000, {
         signal: ctrl.signal,
         onStage: s => { stage = s; show(); if (s === 'fallback') toast('Le service des rues ne répond pas : boucle calculée sans l’animation.', 5000); },
-        onExplore: fc => { MV.setExplore(fc); anim = MV.animateExplore(Math.min(3500, 1500 + fc.features.length / 20)); },
+        onExplore: fc => { MV.setExplore(fc); anim = MV.animateExplore(Math.min(1400, 600 + fc.features.length / 60)); },
       });
       if (anim) await anim;
       if (ctrl.signal.aborted) throw Object.assign(new Error(), { name: 'AbortError' });
       clearInterval(timer);
       bar.hidden = true;
       await loadRoute({ points: res.points, loop: true, path: res.path, distance: res.distance, source: 'generated', name: `Boucle de ${fmt.km1(res.distance)} km` });
-      await MV.animateRoute(res.path, 1000);
+      await MV.animateRoute(res.path, 600);
       MV.fadeExplore();
       toast(`Boucle de ${fmt.km(res.distance)} km. « Générer » à nouveau pour une autre.`, 4000);
     } catch (e) {
@@ -658,9 +677,9 @@
     $$('[data-auth]').forEach(b => (b.onclick = () => setAuthMode(b.dataset.auth)));
     $$('[data-step]').forEach(b => (b.onclick = () => {
       const v = Math.max(1, Math.min(42, (parseFloat($('#rand-km').value) || 5) + +b.dataset.step));
-      $('#rand-km').value = v; state.randKm = v; save();
+      $('#rand-km').value = v; state.randKm = v; save(); prefetchStreets();
     }));
-    $('#rand-km').addEventListener('input', e => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (v > 0) { state.randKm = v; save(); } });
+    $('#rand-km').addEventListener('input', e => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (v > 0) { state.randKm = v; save(); prefetchStreets(); } });
     $('#search').addEventListener('submit', e => { e.preventDefault(); search($('#search-input').value); });
     $('#search-input').addEventListener('input', e => { if (!e.target.value) $('#search-results').hidden = true; });
     $('#auth-form').addEventListener('submit', submitAuth);
@@ -770,7 +789,8 @@
       scheduleRoute(state.points.length > 1);
     }
     startWatch();
-    if (!state.points.length && !shared) locate({ quiet: true });
+    if (!state.points.length && !shared) locate({ quiet: true }).then(prefetchStreets);
+    else prefetchStreets();
 
     await HR.store.init();
     renderAccountBtn();

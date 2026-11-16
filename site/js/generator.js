@@ -127,13 +127,49 @@
    * compter les virages), de `s` à `t`. Coût : longueur × type de voie ×
    * réutilisation, + virages.
    */
-  function astar(g, s, t, used, arrivedBy = -1) {
+  // ---------- zones déjà courues ----------
+  // Une rue parallèle à 10 m (chaussée d'en face d'un boulevard, trottoir
+  // tracé à part) est, pour le coureur, la même rue. On marque donc les
+  // cases de 12 m traversées par la boucle, et leurs voisines : tout passage
+  // à moins de ~20 m d'un endroit déjà couru compte comme une répétition.
+  const CELL = 12;
+  const cellKey = (x, y) => Math.floor(x / CELL) * 1e6 + Math.floor(y / CELL);
+  function samples(g, e, step) {
+    const [a, b, len] = g.edges[e], n = Math.max(1, Math.ceil(len / step)), out = [];
+    for (let i = 0; i <= n; i++) out.push([g.x[a] + (g.x[b] - g.x[a]) * i / n, g.y[a] + (g.y[b] - g.y[a]) * i / n]);
+    return out;
+  }
+  function cover(g, zone, edges) {
+    for (const e of edges) for (const [x, y] of samples(g, e, 6)) {
+      const cx = Math.floor(x / CELL), cy = Math.floor(y / CELL);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) zone.add((cx + i) * 1e6 + cy + j);
+    }
+  }
+  /** Part (0 → 1) de l'arête `e` qui passe dans une zone déjà courue. */
+  function coveredPart(g, zone, e) {
+    if (!zone.size) return 0;
+    const pts = samples(g, e, 8).slice(1, -1);
+    if (!pts.length) pts.push([(g.x[g.edges[e][0]] + g.x[g.edges[e][1]]) / 2, (g.y[g.edges[e][0]] + g.y[g.edges[e][1]]) / 2]);
+    return pts.filter(([x, y]) => zone.has(cellKey(x, y))).length / pts.length;
+  }
+
+  function astar(g, s, t, used, arrivedBy = -1, zone = new Set()) {
     const E = g.edges.length, gs = new Float64Array(2 * E).fill(Infinity), prev = new Int32Array(2 * E).fill(-1);
     const heap = new Heap();
     const h = v => MIN_PENALTY * Math.hypot(g.x[v] - g.x[t], g.y[v] - g.y[t]);
     const head = de => (de & 1 ? g.edges[de >> 1][0] : g.edges[de >> 1][1]);
     const tail = de => (de & 1 ? g.edges[de >> 1][1] : g.edges[de >> 1][0]);
-    const cost = e => g.edges[e][2] * g.edges[e][3] * (used.has(e) ? REUSE : 1);
+    const memo = new Map();
+    const cost = e => {
+      let c = memo.get(e);
+      if (c === undefined) {
+        // rue déjà prise, ou passage dans une zone déjà courue : coût multiplié
+        const f = used.has(e) ? 1 : coveredPart(g, zone, e);
+        c = g.edges[e][2] * g.edges[e][3] * (1 + (REUSE - 1) * f);
+        memo.set(e, c);
+      }
+      return c;
+    };
     for (const e of g.adj[s]) {
       const de = 2 * e + (g.edges[e][0] === s ? 0 : 1);
       // repartir d'un point de passage par la rue d'arrivée = demi-tour
@@ -162,11 +198,12 @@
   }
 
   function loopThrough(g, ids) {
-    const used = new Set(), nodes = [], edges = [];
+    const used = new Set(), zone = new Set(), nodes = [], edges = [];
     for (let i = 0; i < ids.length - 1; i++) {
-      const leg = astar(g, ids[i], ids[i + 1], used, edges.length ? edges[edges.length - 1] : -1);
+      const leg = astar(g, ids[i], ids[i + 1], used, edges.length ? edges[edges.length - 1] : -1, zone);
       if (!leg) return null;
       leg.edges.forEach(e => used.add(e));
+      cover(g, zone, leg.edges);
       edges.push(...leg.edges);
       nodes.push(...(i ? leg.nodes.slice(1) : leg.nodes));
     }
@@ -190,6 +227,40 @@
     return worst;
   }
 
+  /**
+   * Part (0 → 1) de la boucle qui repasse à moins de 20 m d'un endroit déjà
+   * couru plus tôt (même rue, chaussée d'en face, trottoir parallèle…).
+   * Les 100 premiers et derniers mètres, autour du départ, ne comptent pas :
+   * on part et on revient forcément au même endroit.
+   */
+  function spatialOverlap(g, nodes) {
+    const pts = [];
+    let along = 0;
+    for (let i = 1; i < nodes.length; i++) {
+      const a = nodes[i - 1], b = nodes[i], len = Math.hypot(g.x[b] - g.x[a], g.y[b] - g.y[a]), n = Math.max(1, Math.round(len / 10));
+      for (let k = 0; k < n; k++) pts.push([g.x[a] + (g.x[b] - g.x[a]) * k / n, g.y[a] + (g.y[b] - g.y[a]) * k / n, along + len * k / n]);
+      along += len;
+    }
+    const L = along, C = 20, grid = new Map();
+    pts.forEach((p, i) => { const k = Math.floor(p[0] / C) * 1e6 + Math.floor(p[1] / C); (grid.get(k) || grid.set(k, []).get(k)).push(i); });
+    let hit = 0, counted = 0;
+    for (const [x, y, s] of pts) {
+      if (s < 100 || s > L - 100) continue;
+      counted++;
+      const cx = Math.floor(x / C), cy = Math.floor(y / C);
+      let found = false;
+      for (let i = -1; i <= 1 && !found; i++) for (let j = -1; j <= 1 && !found; j++) {
+        for (const q of grid.get((cx + i) * 1e6 + cy + j) || []) {
+          const [qx, qy, qs] = pts[q];
+          // un autre passage : à plus de 150 m le long de la boucle, et pas dans la zone du départ
+          if (Math.abs(qs - s) > 150 && qs >= 100 && qs <= L - 100 && Math.hypot(qx - x, qy - y) < 20) { found = true; break; }
+        }
+      }
+      if (found) hit++;
+    }
+    return counted ? hit / counted : 0;
+  }
+
   /** Note d'une boucle : plus elle est basse, meilleure est la boucle. */
   function score(g, loop, target) {
     let L = 0, weighted = 0, reused = 0;
@@ -207,9 +278,11 @@
     for (let i = 1; i < n.length; i++) area += g.x[n[i - 1]] * g.y[n[i]] - g.x[n[i]] * g.y[n[i - 1]];
     const roundness = Math.min(1, 4 * Math.PI * Math.abs(area / 2) / (L * L)); // 1 = cercle parfait
     const err = Math.abs(L - target) / target;
+    // répétition : même rue reprise, ou passage parallèle tout proche
+    const reuse = Math.max(reused / L, spatialOverlap(g, n));
     return {
-      L, err, reuse: reused / L,
-      value: err * 120 + (reused / L) * 150 + (weighted / L - 1) * 40 + (turns / (L / 1000)) * 1.5 + (1 - roundness) * 25
+      L, err, reuse,
+      value: err * 120 + reuse * 150 + (weighted / L - 1) * 40 + (turns / (L / 1000)) * 1.5 + (1 - roundness) * 25
         + overlap(g, loop) * 60, // trop proche d'une boucle déjà proposée
     };
   }

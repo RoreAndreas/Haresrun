@@ -26,7 +26,8 @@
   const { offset, pathLength } = HR;
   const TORTUOSITY = 1.3;   // une boucle réelle est ~30 % plus longue que le cercle idéal
   const MIN_PENALTY = 0.9;  // coût minimal d'un mètre (chemins) : garde l'heuristique A* juste
-  const REUSE = 4;          // coût d'une rue déjà empruntée par la boucle
+  const REUSE = 10;         // coût d'une rue déjà empruntée par la boucle
+  const MAX_REUSE = 0.10;   // au plus 10 % de la boucle sur des rues déjà courues
   const abortError = () => Object.assign(new Error('Génération annulée.'), { name: 'AbortError' });
 
   /** Rayon de rues nécessaire pour une boucle de `target` mètres. */
@@ -126,7 +127,7 @@
    * compter les virages), de `s` à `t`. Coût : longueur × type de voie ×
    * réutilisation, + virages.
    */
-  function astar(g, s, t, used) {
+  function astar(g, s, t, used, arrivedBy = -1) {
     const E = g.edges.length, gs = new Float64Array(2 * E).fill(Infinity), prev = new Int32Array(2 * E).fill(-1);
     const heap = new Heap();
     const h = v => MIN_PENALTY * Math.hypot(g.x[v] - g.x[t], g.y[v] - g.y[t]);
@@ -135,7 +136,9 @@
     const cost = e => g.edges[e][2] * g.edges[e][3] * (used.has(e) ? REUSE : 1);
     for (const e of g.adj[s]) {
       const de = 2 * e + (g.edges[e][0] === s ? 0 : 1);
-      gs[de] = cost(e); heap.push(gs[de] + h(head(de)), de);
+      // repartir d'un point de passage par la rue d'arrivée = demi-tour
+      gs[de] = cost(e) + (e === arrivedBy ? 300 : arrivedBy >= 0 ? turnCost(g, other(g, arrivedBy, s), s, head(de)) : 0);
+      heap.push(gs[de] + h(head(de)), de);
     }
     let goal = -1;
     const closed = new Uint8Array(2 * E);
@@ -161,7 +164,7 @@
   function loopThrough(g, ids) {
     const used = new Set(), nodes = [], edges = [];
     for (let i = 0; i < ids.length - 1; i++) {
-      const leg = astar(g, ids[i], ids[i + 1], used);
+      const leg = astar(g, ids[i], ids[i + 1], used, edges.length ? edges[edges.length - 1] : -1);
       if (!leg) return null;
       leg.edges.forEach(e => used.add(e));
       edges.push(...leg.edges);
@@ -205,8 +208,8 @@
     const roundness = Math.min(1, 4 * Math.PI * Math.abs(area / 2) / (L * L)); // 1 = cercle parfait
     const err = Math.abs(L - target) / target;
     return {
-      L, err,
-      value: err * 120 + (reused / L) * 80 + (weighted / L - 1) * 40 + (turns / (L / 1000)) * 1.5 + (1 - roundness) * 25
+      L, err, reuse: reused / L,
+      value: err * 120 + (reused / L) * 150 + (weighted / L - 1) * 40 + (turns / (L / 1000)) * 1.5 + (1 - roundness) * 25
         + overlap(g, loop) * 60, // trop proche d'une boucle déjà proposée
     };
   }
@@ -270,8 +273,8 @@
     // boucle par 3 points sur un cercle touchant le départ (forme ronde),
     // rayon ajusté une fois si la distance est loin du compte.
     const candidates = [], base = Math.random() * 360;
-    for (let k = 0; k < 6; k++) {
-      const bearing = base + k * 60 + (Math.random() - 0.5) * 30;
+    for (let k = 0; k < 8; k++) {
+      const bearing = base + k * 45 + (Math.random() - 0.5) * 20;
       let r = r0;
       for (let it = 0; it < 2; it++) {
         const c = offset(start, r, bearing);
@@ -288,9 +291,14 @@
       }
     }
     if (!candidates.length) { onStage('fallback'); return generateOSRM(start, target, signal); }
-    // la meilleure note parmi les boucles à la bonne distance (±15 %), sinon la plus proche
-    const good = candidates.filter(c => c.err <= 0.15);
-    const best = (good.length ? good : candidates).sort((a, b) => (good.length ? a.value - b.value : a.err - b.err))[0];
+    // Règles strictes d'abord : bonne distance (±15 %) et au moins 90 % de
+    // rues nouvelles ; parmi celles-là, la meilleure note. Si aucune ne
+    // passe (départ au fond d'une impasse, quartier très peu maillé…), on
+    // relâche la distance, puis on prend la moins répétitive.
+    const pick = list => list.sort((a, b) => a.value - b.value)[0];
+    const best = pick(candidates.filter(c => c.err <= 0.15 && c.reuse <= MAX_REUSE))
+      || pick(candidates.filter(c => c.reuse <= MAX_REUSE))
+      || candidates.sort((a, b) => a.reuse - b.reuse || a.err - b.err)[0];
     const path = best.nodes.map(i => ({ lat: g.lat[i], lng: g.lng[i] }));
     recent.unshift(new Set(best.edges.map(e => edgeKey(g, e))));
     if (recent.length > 3) recent.pop();

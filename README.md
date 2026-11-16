@@ -74,15 +74,23 @@ envois par heure : pour un vrai lancement, brancher un service d'envoi
 ## Comment ça marche
 
 - **Tracer** : chaque point touché prolonge le trajet ; le dernier est
-  l'arrivée (D = départ, A = arrivée). Les repères se déplacent en les
-  glissant. **Boucle** ramène au départ ; **Suivre les chemins** décoché
-  relie les points en ligne droite.
+  l'arrivée (D = départ, A = arrivée) : on ne revient pas au départ, sauf
+  si l'on coche **Retour au départ**. Ajouter un point à une boucle
+  générée en fait un aller simple jusqu'à ce point. Les repères se
+  déplacent en les glissant ; **Suivre les chemins** décoché relie les
+  points en ligne droite.
 - **Aléatoire** : on choisit la distance, HARES RUN récupère les rues
   autour du départ, les explore depuis le départ par l'algorithme de
-  Dijkstra — c'est l'animation, les rues s'allument par ordre de distance —
-  puis construit une boucle passant par deux points tirés au hasard, chaque
-  tronçon calculé par A* en évitant de repasser par les mêmes rues. La
-  distance est ajustée à ±7 %. Une boucle sort en moins d'une seconde :
+  Dijkstra — c'est l'animation (2,5 s), les rues s'allument par ordre de
+  distance — puis compare 16 boucles candidates et garde la meilleure :
+  - **au moins 90 % de rues nouvelles** : on ne repasse presque jamais par
+    une rue déjà courue (règle stricte, pas seulement une préférence) ;
+  - bonne distance (±7 % visé), voies agréables (chemins et petites rues
+    plutôt que grands axes, parkings, escaliers), peu de virages, forme
+    ronde, points de passage jamais dans une impasse ;
+  - « Générer » à nouveau propose une boucle différente des 3 dernières.
+
+  Une boucle sort en moins d'une seconde :
   - les rues sont lues directement dans les tuiles vectorielles de la carte
     (OpenFreeMap, niveau de détail maximal), servies par un CDN et souvent
     déjà en cache — pas de serveur lent à attendre ;

@@ -60,10 +60,21 @@
   function addPoint(ll, label = '') {
     if (state.points.length >= MAX_POINTS) return toast(`Maximum ${MAX_POINTS} points par trajet`);
     snapshot();
+    // Tracé manuel : l'arrivée est le dernier point touché. Prolonger une
+    // boucle générée la transforme donc en aller simple jusqu'à ce point.
+    if (!state.points.length) setLoop(false); // nouveau tracé : aller simple par défaut
+    else if (state.loop && state.fixed && state.fixed.source === 'generated') {
+      setLoop(false);
+      toast('L’arrivée est maintenant le dernier point touché.');
+    }
     const p = { id: uid(), lat: ll.lat, lng: ll.lng, label };
     state.points.push(p);
     if (!label) nameIt(p);
     refresh();
+  }
+  function setLoop(on) {
+    state.loop = !!on;
+    $('#loop').checked = state.loop;
   }
   function setStart(ll) {
     snapshot();
@@ -83,6 +94,7 @@
     state.points = [];
     state.fixed = null;
     state.savedId = null;
+    setLoop(false); // un nouveau tracé repart en aller simple
     refresh();
     toast('Trajet effacé. « Annuler » pour revenir en arrière.');
   }

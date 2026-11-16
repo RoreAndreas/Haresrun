@@ -1,26 +1,38 @@
-# HARES RUN — parcours de course sur OpenStreetMap
+# HARES RUN — trajets de course, à tracer, générer, partager et suivre
 
-Planificateur de parcours de course à pied, en sombre et sans fioritures.
-On place un **départ**, des **étapes** et une **arrivée** sur la carte (ou on
-part de sa position), HARES RUN calcule l'itinéraire piéton, la distance, le
-dénivelé, et l'**allure** à tenir pour finir dans le temps prévu. Le
-parcours s'exporte en **image PNG** avec ces informations.
+Appli web de course à pied, sombre et épurée, pensée pour le téléphone :
 
-**Gratuit, sans clé ni compte** : tout repose sur OpenStreetMap et des
-services publics gratuits. Page statique : aucun build, le dossier `site/`
-est publié tel quel.
+- **Tracer** un trajet point par point sur la carte, ou **générer une boucle
+  aléatoire** de N km autour de son départ (avec l'animation de l'exploration
+  des rues).
+- **Suivre** un trajet avec le GPS : position sur le tracé, distance faite et
+  restante, alerte si on sort du parcours.
+- **Partager** un trajet par un simple lien, que n'importe qui peut ouvrir et
+  suivre, sans compte.
+- **Mes trajets** : bibliothèque des trajets enregistrés, liée au compte de
+  chacun (e-mail + mot de passe).
+- Distance, dénivelé, **allure** à tenir pour le temps prévu, **image PNG**
+  du trajet.
+
+Page statique : aucun build, le dossier `site/` est publié tel quel.
 
 ```
 haresrun/
-├── site/              le dossier publié, tel quel
-│   ├── index.html
-│   ├── style.css
-│   ├── app.js         carte, points, itinéraire, allure
-│   ├── poster.js      l'image PNG (1080 × 1350)
-│   ├── config.js      ← réglages : centre de la carte par défaut
-│   ├── vendor/leaflet bibliothèque de carte (Leaflet 1.9.4, licence BSD)
-│   └── favicon.svg
-└── serve.py           aperçu local
+├── site/                  le dossier publié, tel quel
+│   ├── index.html, style.css, favicon.svg
+│   ├── config.js          ← réglages : centre par défaut, clés Supabase
+│   ├── js/
+│   │   ├── app.js         interface et logique de l'appli
+│   │   ├── mapview.js     carte MapLibre, styles, tracé, animations
+│   │   ├── generator.js   boucles aléatoires (graphe des rues, Dijkstra, A*)
+│   │   ├── follow.js      suivi GPS d'un trajet
+│   │   ├── store.js       comptes et bibliothèque (Supabase ou appareil)
+│   │   ├── services.js    itinéraires, altitudes, recherche d'adresses
+│   │   ├── poster.js      image PNG (1080 × 1350)
+│   │   └── util.js        outils communs
+│   └── vendor/            MapLibre GL 4.7.1 (BSD), supabase-js 2.45.4 (MIT)
+├── supabase/schema.sql    table des trajets et règles d'accès
+└── serve.py               aperçu local
 ```
 
 ## Lancer
@@ -30,84 +42,88 @@ python serve.py
 ```
 
 puis ouvrir <http://localhost:8000>. La géolocalisation n'est permise par
-les navigateurs que sur `https://` ou `localhost` : ouvrir `index.html`
-directement (`file://`) ne la donnerait pas.
+les navigateurs que sur `https://` ou `localhost`.
 
-## Services utilisés
+## Activer les comptes (Supabase, gratuit)
 
-| Fonction | Service | Remarque |
-|---|---|---|
-| Carte « Simplifiée » | fond gris foncé Esri (World Dark Gray Canvas) | épurée : rues principales et noms, rien d'autre |
-| Carte « Complète » | tuiles OpenStreetMap standard, assombries | la plus détaillée : sentiers, pistes, bâtiments, commerces |
-| Carte « Claire » | tuiles OpenStreetMap standard | la complète, en couleurs d'origine |
-| Carte « Satellite » | imagerie Esri World Imagery | pour repérer ce qui n'est pas sur la carte |
-| Itinéraire piéton | OSRM de FOSSGIS (`routing.openstreetmap.de`) | ligne droite si indisponible |
-| Recherche, nom des points | Nominatim (OpenStreetMap), Photon en secours | une requête par seconde au plus |
-| Dénivelé | Open-Meteo | |
+Sans cette étape, l'appli marche entièrement, mais les trajets enregistrés
+restent sur l'appareil. Avec, chacun se crée un compte et retrouve ses
+trajets partout.
+
+1. Créer un compte sur <https://supabase.com>, puis **New project** (choisir
+   une région proche, par ex. `West EU`). Le plan gratuit suffit.
+2. **SQL Editor → New query** : coller le contenu de `supabase/schema.sql`,
+   puis **Run**. Cela crée la table des trajets et les règles qui ne
+   laissent chacun voir que les siens.
+3. **Authentication → URL Configuration** : dans *Site URL*, mettre
+   l'adresse du site publié (par ex. `https://haresrun.pages.dev`), et
+   l'ajouter aussi dans *Redirect URLs* avec `http://localhost:8000`. C'est
+   là que mènent les liens de confirmation et de mot de passe oublié.
+4. **Project Settings → API** : copier *Project URL* et la clé
+   *anon public* dans `site/config.js` (`supabaseUrl`, `supabaseAnonKey`).
+   Cette clé est faite pour être publique ; ne jamais y mettre la clé
+   *service_role*.
+
+Par défaut, Supabase demande de confirmer l'adresse e-mail par un lien
+avant la première connexion (réglable dans **Authentication → Providers →
+Email**). Le service d'e-mails intégré de Supabase est limité à quelques
+envois par heure : pour un vrai lancement, brancher un service d'envoi
+(**Authentication → Emails → SMTP Settings**).
+
+## Comment ça marche
+
+- **Tracer** : chaque point touché prolonge le trajet ; le dernier est
+  l'arrivée (D = départ, A = arrivée). Les repères se déplacent en les
+  glissant. **Boucle** ramène au départ ; **Suivre les chemins** décoché
+  relie les points en ligne droite.
+- **Aléatoire** : on choisit la distance, HARES RUN télécharge les rues
+  autour du départ (OpenStreetMap, via Overpass), les explore depuis le
+  départ par l'algorithme de Dijkstra — c'est l'animation, les rues
+  s'allument par ordre de distance — puis construit une boucle passant par
+  deux points tirés au hasard, chaque tronçon calculé par A* en évitant de
+  repasser par les mêmes rues. La distance est ajustée à ±7 %.
+- **Suivre** : l'écran reste allumé pendant le suivi. Un site web ne peut
+  lire le GPS que page ouverte et écran allumé : téléphone verrouillé, le
+  suivi s'arrête (il faudrait une appli mobile installée pour ça).
+- **Partager** : tout le trajet tient dans le lien (après `#`). Rien n'est
+  envoyé à un serveur ; la personne qui l'ouvre peut le suivre ou
+  l'enregistrer.
+
+## Services utilisés (gratuits, sans clé)
+
+| Fonction | Service |
+|---|---|
+| Carte « Épurée » | OpenFreeMap (tuiles vectorielles OpenStreetMap), style maison : rues et noms des rues |
+| Carte « Complète » | tuiles OpenStreetMap standard, assombries |
+| Carte « Satellite » | imagerie Esri World Imagery |
+| Itinéraire piéton | OSRM de FOSSGIS (`routing.openstreetmap.de`) |
+| Rues pour les boucles | API Overpass (OpenStreetMap) |
+| Recherche, nom des points | Nominatim, Photon en secours |
+| Dénivelé | Open-Meteo |
+| Comptes, bibliothèque | Supabase (à configurer, voir plus haut) |
 
 Ces services publics sont gratuits avec un usage raisonnable : parfait pour
 un usage perso ou un club. Pour une appli très fréquentée, il faudrait
-héberger son propre serveur d'itinéraires et de tuiles.
+héberger ses propres serveurs d'itinéraires et de tuiles.
 
 ## Quand la carte manque de détails
 
-OpenStreetMap est fait par ses utilisateurs : selon les quartiers, un
-sentier ou une piste peut manquer. Trois solutions, de la plus rapide à la
-plus durable :
+OpenStreetMap est fait par ses utilisateurs : un sentier peut manquer. Le
+bouton de fond (en bas à droite) passe à « Complète » ou « Satellite » ;
+« Suivre les chemins » décoché permet de tracer hors des chemins connus ;
+le lien « Un chemin manque ? » ouvre l'éditeur OpenStreetMap à l'endroit
+affiché pour l'ajouter, pour tout le monde.
 
-1. **Changer de fond** (menu en haut à droite) : « Complète » montre tous
-   les chemins connus, « Satellite » montre le terrain réel. À l'inverse,
-   « Simplifiée » allège la carte quand il y a trop de détails.
-2. **Décocher « Suivre les chemins »** : les points sont reliés en ligne
-   droite, pour courir là où la carte ne connaît pas de chemin. Avec la vue
-   satellite et des étapes rapprochées, le tracé suit le vrai sentier.
-3. **Ajouter le chemin à OpenStreetMap** : lien « Un chemin manque ? » en
-   bas du panneau, qui ouvre l'éditeur à l'endroit affiché (compte gratuit).
-   Le chemin apparaît ensuite sur la carte et dans les itinéraires, en
-   général sous quelques jours, pour toi et pour tous les coureurs du coin.
+## Si la position n'arrive pas
 
-## Utilisation
+La position vient du navigateur, qui la demande au système.
 
-- **Clic sur la carte** : le premier clic place le départ (D), le deuxième
-  l'arrivée (A). Ensuite, chaque clic — sur la carte ou sur le tracé —
-  ajoute une **étape** (1, 2, 3…) dans le tronçon où elle allonge le moins
-  le parcours. Les repères se déplacent en les faisant glisser ; × dans la
-  liste supprime un point, un clic sur son nom centre la carte dessus.
-- Le **sens** du parcours est indiqué par des flèches le long du tracé, sur
-  la carte comme sur l'image exportée.
-- **Partir de ma position** place le départ sur la position de l'appareil :
-  le GPS est écouté quelques secondes et la mesure la plus précise est
-  gardée (jusqu'à ±10 m). La précision s'affiche ; le cercle bleu sur la
-  carte montre la marge d'erreur.
-- **Boucle** : l'arrivée revient au départ. **Suivre les chemins** décoché :
-  les points sont reliés en ligne droite.
-- **Allure** : saisir le temps prévu donne l'allure au km, et inversement,
-  avec la vitesse et l'heure d'arrivée.
-- **Exporter en PNG** : on y donne un nom au run ; l'image reprend tracé,
-  distance, temps prévu, allure, vitesse, dénivelé et nombre d'étapes, avec
-  ou sans fond de carte.
-- La recherche accepte un lieu ou des **coordonnées GPS** (`5.33641, -4.02672`).
-
-Le parcours en cours est gardé dans le navigateur : il est là au retour.
-« Annuler » (ou Ctrl+Z) revient sur la dernière modification.
-
-### Si la position n'arrive pas
-
-La position vient du navigateur, qui la demande au système. Un message
-« trop de temps » signifie que le navigateur n'a rien renvoyé :
-
-- **Sur ordinateur Windows** : Paramètres → Confidentialité et sécurité →
+- **Ordinateur Windows** : Paramètres → Confidentialité et sécurité →
   Localisation : activer « Services de localisation » **et** « Autoriser les
-  applications de bureau à accéder à votre position ». Sans GPS, un
-  ordinateur se situe par le Wi-Fi (à quelques dizaines de mètres) ; en
-  câble Ethernet, souvent pas du tout.
-- **Certains navigateurs** (Brave, Opera, Chromium sans services Google…)
-  n'ont pas de service de localisation : essayer Chrome, Edge ou Firefox.
-- **Sur téléphone** : activer la localisation et autoriser le navigateur ;
-  c'est là que le GPS donne une position précise.
+  applications de bureau à accéder à votre position ».
+- **Certains navigateurs** (Brave, Opera…) n'ont pas de service de
+  localisation : essayer Chrome, Edge ou Firefox.
+- **Téléphone** : activer la localisation et autoriser le navigateur.
 
-Test rapide : si Google Maps, dans le même navigateur, ne trouve pas non
-plus ta position, le blocage vient de l'appareil ou du navigateur, pas de
-HARES RUN.
-
-Limite : 50 points par parcours.
+Si Google Maps, dans le même navigateur, ne trouve pas non plus ta
+position, le blocage vient de l'appareil ou du navigateur.

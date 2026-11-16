@@ -3,99 +3,226 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#121212">
+  <meta name="theme-color" content="#0d0d0d">
   <title>HARES RUN</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="vendor/maplibre/maplibre-gl.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="map" aria-label="Carte"></div>
-  <div id="map-empty" class="map-empty" hidden>
-    <p>La carte n'a pas pu se charger.</p>
+  <div id="map-error" class="map-error" hidden>
+    <p>La carte n'a pas pu s'afficher sur cet appareil.</p>
     <button class="btn btn--accent" onclick="location.reload()">Réessayer</button>
   </div>
 
-  <div class="map-tools" role="toolbar" aria-label="Outils de carte">
-    <select id="layer" class="select" aria-label="Fond de carte">
-      <option value="simple">Simplifiée</option>
-      <option value="dark">Complète</option>
-      <option value="light">Claire</option>
-      <option value="satellite">Satellite</option>
-    </select>
-    <button class="btn" data-action="undo">Annuler</button>
-    <button class="btn" data-action="clear">Effacer</button>
+  <!-- barre du haut -->
+  <header class="top">
+    <span class="logo">HARES RUN</span>
+    <div class="top__actions">
+      <button class="icon-btn" data-action="open-library" aria-label="Mes trajets" title="Mes trajets">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      </button>
+      <button class="icon-btn" data-action="open-account" aria-label="Compte" title="Compte" id="account-btn">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- outils de carte -->
+  <div class="tools">
+    <button class="chip" data-action="cycle-style" id="style-btn">Épurée</button>
+    <button class="icon-btn icon-btn--round" data-action="locate" aria-label="Ma position" title="Ma position">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
   </div>
 
-  <aside id="panel" class="panel">
-    <header class="head">
-      <button class="head__toggle" data-action="toggle-sheet" aria-label="Agrandir ou réduire le panneau"></button>
-      <h1>HARES RUN</h1>
-      <span class="head__sum" id="summary">0,00 km</span>
-    </header>
+  <!-- panneau : replié, il ne montre que le résumé -->
+  <section id="sheet" class="sheet">
+    <button class="sheet__handle" data-action="toggle-sheet" aria-label="Afficher ou masquer les réglages"><span></span></button>
 
-    <div class="panel__scroll">
-      <form id="search" class="search" autocomplete="off">
-        <input id="search-input" type="search" placeholder="Chercher un lieu" enterkeyhint="search">
-      </form>
-      <ul id="search-results" class="results" hidden></ul>
+    <div class="sheet__summary">
+      <div class="sum">
+        <b id="sum-dist">0,00</b><small>km</small>
+        <span id="sum-meta" class="muted"></span>
+      </div>
+      <button class="btn btn--accent" data-action="start-follow" id="follow-btn" disabled>Suivre</button>
+    </div>
 
-      <section class="block">
+    <div class="sheet__body">
+      <div class="seg" role="tablist">
+        <button class="seg__btn" data-mode="draw" role="tab">Tracer</button>
+        <button class="seg__btn" data-mode="random" role="tab">Aléatoire</button>
+      </div>
+
+      <div class="pane" data-pane="draw">
         <p id="hint" class="muted"></p>
         <ol id="points" class="points"></ol>
-        <button class="btn btn--block" data-action="start-here">Partir de ma position</button>
+        <div class="row">
+          <button class="btn" data-action="start-here">Départ = ma position</button>
+          <button class="btn" data-action="undo">Annuler</button>
+          <button class="btn" data-action="clear">Effacer</button>
+        </div>
         <div class="row row--between">
           <label class="check"><input id="loop" type="checkbox"> Boucle</label>
-          <label class="check" title="Décoche pour relier les points en ligne droite (sentier absent de la carte)"><input id="follow" type="checkbox"> Suivre les chemins</label>
+          <label class="check" title="Décoché : les points sont reliés en ligne droite"><input id="roads" type="checkbox"> Suivre les chemins</label>
         </div>
-      </section>
+        <form id="search" class="search" autocomplete="off">
+          <input id="search-input" type="search" placeholder="Aller à un lieu ou des coordonnées" enterkeyhint="search">
+        </form>
+        <ul id="search-results" class="results" hidden></ul>
+      </div>
 
-      <section class="block">
-        <p class="total"><b id="st-dist">0,00</b> km <span id="st-gain" class="muted"></span></p>
-        <div class="pace">
-          <div class="field">
-            <span>Temps prévu</span>
-            <div class="field__inputs">
-              <input id="t-h" type="number" min="0" max="99" inputmode="numeric" placeholder="0" aria-label="heures"> h
-              <input id="t-m" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="minutes"> min
-              <input id="t-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="secondes"> s
-            </div>
-          </div>
-          <div class="field">
-            <span>Allure par km</span>
-            <div class="field__inputs">
-              <input id="p-m" type="number" min="0" max="59" inputmode="numeric" placeholder="5" aria-label="minutes"> :
-              <input id="p-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="secondes">
-            </div>
+      <div class="pane" data-pane="random" hidden>
+        <p class="muted">HARES RUN explore les rues autour du départ et te propose une boucle.</p>
+        <div class="stepper">
+          <button class="btn" data-step="-1" aria-label="Moins">−</button>
+          <label><input id="rand-km" type="number" min="1" max="42" step="0.5" inputmode="decimal"> km</label>
+          <button class="btn" data-step="1" aria-label="Plus">+</button>
+        </div>
+        <p id="rand-from" class="muted small"></p>
+        <button class="btn btn--accent btn--block" data-action="generate" id="gen-btn">Générer une boucle</button>
+      </div>
+
+      <div class="pace">
+        <div class="field">
+          <span>Temps prévu</span>
+          <div class="field__inputs">
+            <input id="t-h" type="number" min="0" max="99" inputmode="numeric" placeholder="0" aria-label="heures"> h
+            <input id="t-m" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="minutes"> min
           </div>
         </div>
-        <p id="pace-out" class="muted"></p>
-      </section>
+        <div class="field">
+          <span>Allure /km</span>
+          <div class="field__inputs">
+            <input id="p-m" type="number" min="0" max="59" inputmode="numeric" placeholder="5" aria-label="minutes"> :
+            <input id="p-s" type="number" min="0" max="59" inputmode="numeric" placeholder="00" aria-label="secondes">
+          </div>
+        </div>
+      </div>
 
-      <button class="btn btn--accent btn--block export-btn" data-action="open-export">Exporter en PNG</button>
+      <div class="actions">
+        <button class="btn" data-action="save">Enregistrer</button>
+        <button class="btn" data-action="share">Partager</button>
+        <button class="btn" data-action="open-export">Image</button>
+      </div>
       <a id="osm-edit" class="osm-edit small" href="https://www.openstreetmap.org/edit" target="_blank" rel="noopener">Un chemin manque ? L'ajouter sur OpenStreetMap</a>
     </div>
-  </aside>
+  </section>
 
+  <!-- suivi GPS -->
+  <section id="follow-ui" class="follow" hidden>
+    <div class="follow__stats">
+      <div><span>Reste</span><b id="f-rem">—</b><small>km</small></div>
+      <div><span>Fait</span><b id="f-done">0,00</b><small>km</small></div>
+      <div><span>Temps</span><b id="f-time">0:00</b></div>
+      <div><span>Allure</span><b id="f-pace">—</b><small>/km</small></div>
+    </div>
+    <p id="f-status" class="follow__status">En attente du GPS…</p>
+    <div class="follow__bar">
+      <button class="btn" data-action="recenter">Recentrer</button>
+      <button class="btn btn--danger" data-action="stop-follow">Arrêter</button>
+    </div>
+  </section>
+
+  <!-- compte -->
+  <dialog id="account-dialog" class="dialog">
+    <div class="dialog__head">
+      <h2 id="account-title">Connexion</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">✕</button>
+    </div>
+    <div id="account-off" hidden>
+      <p class="muted">Les comptes ne sont pas encore activés sur ce site. Tes trajets sont gardés sur cet appareil.</p>
+    </div>
+    <form id="auth-form" class="form" hidden>
+      <div class="seg seg--small">
+        <button type="button" class="seg__btn" data-auth="in">Se connecter</button>
+        <button type="button" class="seg__btn" data-auth="up">Créer un compte</button>
+      </div>
+      <input id="auth-email" class="input" type="email" autocomplete="email" placeholder="E-mail" required>
+      <input id="auth-pass" class="input" type="password" autocomplete="current-password" placeholder="Mot de passe (8 caractères min.)" minlength="8" required>
+      <p id="auth-msg" class="small" hidden></p>
+      <button class="btn btn--accent btn--block" type="submit" id="auth-submit">Se connecter</button>
+      <button class="link" type="button" data-action="forgot">Mot de passe oublié ?</button>
+    </form>
+    <form id="newpass-form" class="form" hidden>
+      <p class="muted">Choisis ton nouveau mot de passe.</p>
+      <input id="newpass" class="input" type="password" autocomplete="new-password" placeholder="Nouveau mot de passe" minlength="8" required>
+      <p id="newpass-msg" class="small" hidden></p>
+      <button class="btn btn--accent btn--block" type="submit">Enregistrer</button>
+    </form>
+    <div id="account-in" class="form" hidden>
+      <p>Connecté : <b id="account-email"></b></p>
+      <button class="btn btn--block" data-action="sign-out">Se déconnecter</button>
+    </div>
+  </dialog>
+
+  <!-- bibliothèque -->
+  <dialog id="library-dialog" class="dialog">
+    <div class="dialog__head">
+      <h2>Mes trajets</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">✕</button>
+    </div>
+    <p id="library-where" class="muted small"></p>
+    <button class="btn btn--block" data-action="import-local" id="import-btn" hidden></button>
+    <ul id="library-list" class="library"></ul>
+  </dialog>
+
+  <!-- enregistrer -->
+  <dialog id="save-dialog" class="dialog">
+    <form id="save-form" class="form">
+      <div class="dialog__head">
+        <h2>Enregistrer le trajet</h2>
+        <button type="button" class="icon-btn" data-close aria-label="Fermer">✕</button>
+      </div>
+      <input id="save-name" class="input" type="text" maxlength="60" placeholder="Nom du trajet" required>
+      <p id="save-where" class="muted small"></p>
+      <button class="btn btn--accent btn--block" type="submit">Enregistrer</button>
+    </form>
+  </dialog>
+
+  <!-- trajet partagé -->
+  <dialog id="shared-dialog" class="dialog">
+    <div class="dialog__head">
+      <h2 id="shared-title">Trajet partagé</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">✕</button>
+    </div>
+    <p id="shared-meta" class="muted"></p>
+    <div class="form">
+      <button class="btn btn--accent btn--block" data-action="shared-follow">Suivre ce trajet</button>
+      <button class="btn btn--block" data-action="shared-save">Enregistrer dans mes trajets</button>
+    </div>
+  </dialog>
+
+  <!-- image -->
   <dialog id="export-dialog" class="dialog dialog--wide">
+    <div class="dialog__head">
+      <h2>Image du trajet</h2>
+      <button class="icon-btn" data-close aria-label="Fermer">✕</button>
+    </div>
     <div class="export">
       <canvas id="poster" width="1080" height="1350"></canvas>
-      <div class="export__opts">
-        <h2>Exporter en PNG</h2>
+      <div class="form">
         <input id="run-name" class="input" type="text" maxlength="40" placeholder="Nom du run">
         <label class="check"><input id="with-map" type="checkbox"> Fond de carte</label>
         <p id="export-note" class="muted small"></p>
-        <button class="btn btn--accent btn--block" data-action="download">Télécharger</button>
-        <button class="btn btn--block" data-action="close-export">Fermer</button>
+        <button class="btn btn--accent btn--block" data-action="download">Télécharger le PNG</button>
       </div>
     </div>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="vendor/maplibre/maplibre-gl.js"></script>
+  <script src="vendor/supabase/supabase.js"></script>
   <script src="config.js"></script>
-  <script src="poster.js"></script>
-  <script src="app.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/services.js"></script>
+  <script src="js/mapview.js"></script>
+  <script src="js/generator.js"></script>
+  <script src="js/follow.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/poster.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

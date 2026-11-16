@@ -16,5 +16,6 @@ window.HARES_CONFIG = {
   defaultCenter: { lat: 5.3364, lng: -4.0267 }, // Abidjan
   defaultZoom: 14,
   supabaseUrl: 'https://dkjsemjvebfrqtklrwge.supabase.co',
-  supabaseAnonKey: 'sb_publishable_Pay2IVV_I3-zmSPcSCdhMw_ZlrLKO5k', // clé publique (publishable)
+  // clé publique « anon » (Legacy API keys) ; la clé « publishable » marche aussi
+  supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRranNlbWp2ZWJmcnF0a2xyd2dlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTQ4MzY4NTUsImV4cCI6MjExMDQxMjg1NX0.ULcmXRIiQQu2D3ukMSjJgM6xmZ0HOUL-K-KOs1yPKkM',
 };
